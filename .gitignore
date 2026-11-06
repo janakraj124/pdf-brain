@@ -1,5 +1,5 @@
 # ============================================================
-# PDF Brain — .gitignore (Complete)
+# PDF Brain — .gitignore (Production Ready)
 # ============================================================
 
 # === 🔐 Sensitive Data (कहिल्यै GitHub मा नजाने) ===
@@ -11,6 +11,12 @@ token.pickle
 reset_tokens.json
 reset_otp.json
 api_keys.json
+client_secret*.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # === 💾 Database ===
 pdf_brain.db
@@ -31,15 +37,22 @@ backups/
 exports/
 logs/
 chats/
+chat_history/
+user_docs/
+uploads/
 
 # === 🗄️ ChromaDB (Vector Store) ===
 chroma_db/
 .chroma/
 chroma/
 
-# === 📄 Document Tags / Metadata ===
+# === 📄 Metadata ===
 doc_tags.json
 messaging_users.json
+dm_data.json
+friends_data.json
+pdf_summary_*.txt
+*_for_*.txt
 
 # === 🐍 Python ===
 __pycache__/
@@ -97,18 +110,8 @@ desktop.ini
 # === 📝 Logs ===
 *.log
 *.logs
-logs/
-
-# === 🔑 Credentials ===
-client_secret*.json
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
 
 # === 📤 Uploaded Files ===
-uploads/
 *.upload
 uploaded_*
 
@@ -123,41 +126,30 @@ temp/
 *.backup
 *.zip
 
-# === 🐳 Docker (यदि छ भने) ===
-.dockerignore
-Dockerfile.local
-
-# === 📊 Data Files (यदि sensitive छन्) ===
-*.csv
-*.xlsx
-*.xls
-# (तर requirements.txt र README.md राख्नुहोस्)
-
-# === ✅ IMPORTANT: यी राख्नुहोस् ===
-!requirements.txt
-!README.md
-!LICENSE
-!*.py
-!*.toml
-!.gitignore
-
-# === User Data (कहिल्यै GitHub मा नजाने) ===
-chat_history/
-dm_data.json
-friends_data.json
-user_docs/
-messaging_users.json
-
-# === Binary / Media Files ===
+# === 🎬 Media / Binary ===
 *.mp3
 *.mp4
 *.wav
 *.exe
 *.dll
-*.so
 *.bin
 cloudflared.exe
 
-# === User-specific Files ===
-pdf_summary_*.txt
-*_for_*.txt
+# === 🐳 Docker ===
+.dockerignore
+Dockerfile.local
+
+# === 📊 Data Files (चाहनुहुन्छ भने) ===
+# *.csv
+# *.xlsx
+# *.xls
+
+# === ✅ IMPORTANT: यी राख्नुहोस् ===
+!requirements.txt
+!README.md
+!LICENSE
+!.gitignore
+!*.toml
+!*.py
+!sample_*.csv
+!test_*.csv
