@@ -140,3 +140,24 @@ Dockerfile.local
 !*.py
 !*.toml
 !.gitignore
+
+# === User Data (कहिल्यै GitHub मा नजाने) ===
+chat_history/
+dm_data.json
+friends_data.json
+user_docs/
+messaging_users.json
+
+# === Binary / Media Files ===
+*.mp3
+*.mp4
+*.wav
+*.exe
+*.dll
+*.so
+*.bin
+cloudflared.exe
+
+# === User-specific Files ===
+pdf_summary_*.txt
+*_for_*.txt
