@@ -82,6 +82,7 @@ wheels/
 .ipynb_checkpoints/
 
 # === 🌊 Streamlit ===
+.streamlit/
 .streamlit/secrets.toml
 .streamlit/secrets.yaml
 .streamlit/secrets.json
