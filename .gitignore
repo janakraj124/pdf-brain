@@ -1,0 +1,142 @@
+# ============================================================
+# PDF Brain — .gitignore (Complete)
+# ============================================================
+
+# === 🔐 Sensitive Data (कहिल्यै GitHub मा नजाने) ===
+.env
+users.json
+feedback.csv
+credentials.json
+token.pickle
+reset_tokens.json
+reset_otp.json
+api_keys.json
+
+# === 💾 Database ===
+pdf_brain.db
+*.db
+*.sqlite
+*.sqlite3
+
+# === 📁 User Data Folders ===
+docs/
+history_data/
+messenger_uploads/
+avatar_uploads/
+temp_images/
+temp_tables/
+temp_audio/
+temp_ocr/
+backups/
+exports/
+logs/
+chats/
+
+# === 🗄️ ChromaDB (Vector Store) ===
+chroma_db/
+.chroma/
+chroma/
+
+# === 📄 Document Tags / Metadata ===
+doc_tags.json
+messaging_users.json
+
+# === 🐍 Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.ipynb_checkpoints/
+
+# === 🌊 Streamlit ===
+.streamlit/secrets.toml
+.streamlit/secrets.yaml
+.streamlit/secrets.json
+
+# === 🎨 IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# === 🖥️ System ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+*.lnk
+
+# === 📝 Logs ===
+*.log
+*.logs
+logs/
+
+# === 🔑 Credentials ===
+client_secret*.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# === 📤 Uploaded Files ===
+uploads/
+*.upload
+uploaded_*
+
+# === 🎯 Temp Files ===
+*.tmp
+*.temp
+tmp/
+temp/
+
+# === 📦 Backup ===
+*.bak
+*.backup
+*.zip
+
+# === 🐳 Docker (यदि छ भने) ===
+.dockerignore
+Dockerfile.local
+
+# === 📊 Data Files (यदि sensitive छन्) ===
+*.csv
+*.xlsx
+*.xls
+# (तर requirements.txt र README.md राख्नुहोस्)
+
+# === ✅ IMPORTANT: यी राख्नुहोस् ===
+!requirements.txt
+!README.md
+!LICENSE
+!*.py
+!*.toml
+!.gitignore

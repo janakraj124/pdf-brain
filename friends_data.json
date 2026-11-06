@@ -1,0 +1,18 @@
+{
+  "users": [
+    "rupa123",
+    "Hari"
+  ],
+  "friends": {
+    "rupa123": [
+      "Hari"
+    ],
+    "Hari": [
+      "rupa123"
+    ]
+  },
+  "requests": {
+    "rupa123": [],
+    "Hari": []
+  }
+}
