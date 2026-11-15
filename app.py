@@ -20,7 +20,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from email_server import send_email_with_attachment
-
+from pathlib import Path
     
 from google_sync import (
     get_google_services, create_spreadsheet, write_dataframe_to_sheet,
@@ -32,6 +32,18 @@ from memory_system import (
     save_memory, get_memories, get_memory_context,
     extract_memories_from_text, summarize_conversation,
     get_latest_summary, delete_memory, clear_all_memories
+)
+from video_converter import (
+    get_ffmpeg_path,
+    get_video_info,
+    convert_to_hd,
+    quick_hd_convert,
+    compress_video,
+    apply_hd_effect,
+    apply_hd_filter,
+    change_voice_pitch,
+    extract_audio,
+    convert_with_effect,
 )
 from security import log_action, get_audit_logs
 from admin import render_admin_panel
@@ -2361,17 +2373,20 @@ if "_msg_flash" in st.session_state:
 # ============================================================
 render_sticky_header(st.session_state.user, lang)
 
-# ✅ Admin check
+# ============================================================
+# TABS (Admin + Video)
+# ============================================================
 is_admin = st.session_state.get("user_role", "user") == "admin"
 
 if is_admin:
-    tab1, tab2, tab3, tab4, tab_admin = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_admin = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "👑 Admin Dashboard"
+        t("agent_tab", lang), "🎬 HD Converter", "👑 Admin Dashboard"
     ])
 else:
-    tab1, tab2, tab3, tab4 = st.tabs([
-        t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang), t("agent_tab", lang)
+    tab1, tab2, tab3, tab4, tab_video = st.tabs([
+        t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
+        t("agent_tab", lang), "🎬 HD Converter"
     ])
     tab_admin = None
     
@@ -3143,6 +3158,233 @@ with tab4:
             st.session_state.agent_mini_chat = []
             st.rerun()
 
+# ============================================================
+# 🎬 TAB 5: HD VIDEO CONVERTER
+# ============================================================
+with tab_video:
+    st.markdown("## 🎬 HD Video Converter")
+    st.caption("Format, Resolution (720p/1080p/4K), Compress, Audio Extract — FFmpeg powered")
+
+    ffmpeg_path = get_ffmpeg_path()
+    if not ffmpeg_path:
+        st.error("❌ FFmpeg भेटिएन")
+        st.code("pip install imageio-ffmpeg", language="bash")
+    else:
+        st.success(f"✅ FFmpeg ready")
+
+        uploaded_video = st.file_uploader(
+            "भिडियो अपलोड गर्नुहोस् (MP4, AVI, MKV, MOV, WebM)",
+            type=["mp4", "avi", "mkv", "mov", "webm", "flv", "wmv"],
+            key="video_uploader"
+        )
+
+        if uploaded_video:
+            os.makedirs("temp_videos", exist_ok=True)
+            input_path = os.path.join("temp_videos", uploaded_video.name)
+            with open(input_path, "wb") as f:
+                f.write(uploaded_video.getbuffer())
+
+            st.video(input_path)
+
+            info = get_video_info(input_path)
+            if info:
+                st.markdown("### 📊 Video Info")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Resolution", f"{info['width']}×{info['height']}")
+                c2.metric("Duration", f"{int(info['duration'])}s")
+                c3.metric("Codec", info["codec"])
+                c4.metric("Size", f"{info['size_mb']:.1f} MB")
+
+            st.markdown("### ⚙️ HD Conversion Settings")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                target_format = st.selectbox(
+                    "Output Format",
+                    ["mp4", "mkv", "webm"],
+                    key="video_format"
+                )
+            with col2:
+                target_res = st.selectbox(
+                    "HD Resolution",
+                    ["1080p", "720p", "1440p", "2160p", "480p", "360p"],
+                    key="video_resolution"
+                )
+
+            quality = st.select_slider(
+                "Quality",
+                options=["low", "medium", "high", "ultra"],
+                value="high",
+                key="video_quality"
+            )
+
+            if st.button("🎬 Convert to HD", type="primary", use_container_width=True, key="video_convert_btn"):
+                output_name = f"hd_{Path(uploaded_video.name).stem}_{target_res}.{target_format}"
+                output_path = os.path.join("temp_videos", output_name)
+
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                def update_progress(p):
+                    progress_bar.progress(p)
+                    status_text.text(f"Converting... {p}%")
+
+                result = convert_to_hd(
+                    input_path, output_path,
+                    resolution=target_res,
+                    target_format=target_format,
+                    quality=quality,
+                    progress_callback=update_progress
+                )
+
+                if result["success"]:
+                    progress_bar.progress(100)
+                    status_text.text("✅ Done!")
+                    st.success(f"✅ Converted: {result['size_mb']:.1f} MB")
+
+                    with open(output_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Download HD Video",
+                            data=f.read(),
+                            file_name=output_name,
+                            mime=f"video/{target_format}",
+                            use_container_width=True
+                        )
+                else:
+                    st.error(f"❌ Error: {result['error']}")
+
+        st.markdown("---")
+        st.markdown("### 🎵 Audio Extract")
+        if uploaded_video:
+            if st.button("🎵 Extract Audio (MP3)", key="audio_extract_btn", use_container_width=True):
+                audio_path = os.path.join("temp_videos", f"{Path(uploaded_video.name).stem}.mp3")
+                result = extract_audio(input_path, audio_path)
+                if result["success"]:
+                    st.success("✅ Audio extracted!")
+                    with open(audio_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Download MP3",
+                            data=f.read(),
+                            file_name=f"{Path(uploaded_video.name).stem}.mp3",
+                            mime="audio/mpeg",
+                            use_container_width=True
+                        )
+                else:
+                    st.error(f"❌ {result['error']}")
+        
+        # Video tab भित्र, Audio Extract पछि
+
+st.markdown("---")
+st.markdown("### 🎤 AI Voice Changer")
+
+if uploaded_video:
+    col1, col2 = st.columns(2)
+    with col1:
+        voice_pitch = st.slider(
+            "Pitch (semitones)",
+            min_value=-12, max_value=12, value=4,
+            help="+ = गहिरो/मोटो, - = पातलो/उच्च"
+        )
+    with col2:
+        st.caption("Pedalboard AI Voice Changer")
+
+    if st.button("🎤 Change Voice", key="voice_change_btn", use_container_width=True):
+        # पहिले audio extract गर्ने
+        temp_audio = os.path.join("temp_videos", f"voice_temp_{Path(uploaded_video.name).stem}.wav")
+        extract_result = extract_audio(input_path, temp_audio, format="wav")
+
+        if extract_result["success"]:
+            voice_output = os.path.join("temp_videos", f"voice_changed_{Path(uploaded_video.name).stem}.wav")
+
+            with st.spinner("🎤 Voice change हुँदै..."):
+                result = change_voice_pitch(temp_audio, voice_output, semitones=voice_pitch)
+
+            if result["success"]:
+                st.success("✅ Voice changed!")
+                with open(voice_output, "rb") as f:
+                    st.download_button(
+                        "⬇️ Download Voice Changed Audio",
+                        data=f.read(),
+                        file_name=f"voice_changed_{Path(uploaded_video.name).stem}.wav",
+                        mime="audio/wav",
+                        use_container_width=True
+                    )
+            else:
+                st.error(f"❌ {result['error']}")
+        else:
+            st.error(f"❌ Audio extract failed: {extract_result['error']}")
+            
+        # Video tab भित्र, Voice Changer पछि
+
+st.markdown("---")
+st.markdown("### 🎬 HD Effects")
+
+if uploaded_video:
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_effect = st.selectbox(
+            "Effect",
+            ["glow", "glitch", "crt", "chromatic", "vintage"],
+            key="hd_effect_select"
+        )
+    with col2:
+        effect_intensity = st.select_slider(
+            "Intensity",
+            options=["low", "medium", "high"],
+            value="medium",
+            key="hd_effect_intensity"
+        )
+
+    if st.button("🎬 Apply Effect", key="apply_effect_btn", use_container_width=True):
+        effect_output = os.path.join("temp_videos", f"effect_{selected_effect}_{Path(uploaded_video.name).stem}.mp4")
+
+        with st.spinner(f"🎬 {selected_effect} effect लागू हुँदै..."):
+            result = apply_hd_effect(input_path, effect_output, effect=selected_effect, intensity=effect_intensity)
+
+        if result["success"]:
+            st.success(f"✅ {selected_effect} applied!")
+            with open(effect_output, "rb") as f:
+                st.download_button(
+                    f"⬇️ Download {selected_effect} Video",
+                    data=f.read(),
+                    file_name=f"effect_{selected_effect}_{Path(uploaded_video.name).stem}.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
+        else:
+            st.error(f"❌ {result['error']}")
+            
+        # Video tab भित्र, HD Effects पछि
+
+st.markdown("---")
+st.markdown("### 🎨 HD Filters (Color Grading)")
+
+if uploaded_video:
+    filter_type = st.selectbox(
+        "Filter Type",
+        ["cinematic", "vibrant", "moody", "warm"],
+        key="hd_filter_select",
+        help="Cinematic = Orange/Teal, Vibrant = Social Media, Moody = Dark, Warm = Golden"
+    )
+
+    if st.button("🎨 Apply Filter", key="apply_filter_btn", use_container_width=True):
+        filter_output = os.path.join("temp_videos", f"filter_{filter_type}_{Path(uploaded_video.name).stem}.mp4")
+
+        with st.spinner(f"🎨 {filter_type} filter लागू हुँदै..."):
+            result = apply_hd_filter(input_path, filter_output, filter_type=filter_type)
+
+        if result["success"]:
+            st.success(f"✅ {filter_type} filter applied!")
+            with open(filter_output, "rb") as f:
+                st.download_button(
+                    f"⬇️ Download {filter_type} Video",
+                    data=f.read(),
+                    file_name=f"filter_{filter_type}_{Path(uploaded_video.name).stem}.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
+        else:
+            st.error(f"❌ {result['error']}")                     
 # ============================================================
 # 👑 ADMIN TAB (Admin भए मात्र)
 # ============================================================
