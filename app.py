@@ -21,7 +21,10 @@ from google.genai import types
 from dotenv import load_dotenv
 from email_server import send_email_with_attachment
 from pathlib import Path
-    
+from caption_maker import generate_srt, load_whisper_model
+from caption_translator import translate_srt_gemini
+from subtitle_tools import burn_subtitles, parse_srt, save_srt
+
 from google_sync import (
     get_google_services, create_spreadsheet, write_dataframe_to_sheet,
     read_sheet_as_dataframe, upload_file_to_drive, list_drive_files,
@@ -46,6 +49,7 @@ from video_converter import (
     convert_with_effect,
 )
 from security import log_action, get_audit_logs
+from video_editor import trim_video, add_text, add_music, apply_filter, apply_effect, merge_videos
 from admin import render_admin_panel
 
 load_dotenv()
@@ -2379,14 +2383,14 @@ render_sticky_header(st.session_state.user, lang)
 is_admin = st.session_state.get("user_role", "user") == "admin"
 
 if is_admin:
-    tab1, tab2, tab3, tab4, tab_video, tab_admin = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_admin = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "👑 Admin Dashboard"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "👑 Admin Dashboard"
     ])
 else:
-    tab1, tab2, tab3, tab4, tab_video = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption"
     ])
     tab_admin = None
     
@@ -3159,189 +3163,291 @@ with tab4:
             st.rerun()
 
 # ============================================================
-# 🎬 TAB 5: HD VIDEO CONVERTER (Powerful)
+# 🎬 TAB 5: CAPCUT-STYLE VIDEO EDITOR
 # ============================================================
 with tab_video:
-    st.markdown("## 🎬 HD Video Converter")
-    st.caption("FFmpeg + Pedalboard powered — Convert, Effect, Filter, Voice Change")
+    st.markdown("## 🎬 Powerful Video Editor")
+    st.caption("Trim, Text, Music, Filter, Effect — MoviePy powered")
 
-    ffmpeg_path = get_ffmpeg_path()
-    if not ffmpeg_path:
-        st.error("❌ FFmpeg भेटिएन")
-        st.code("pip install imageio-ffmpeg", language="bash")
-        st.stop()
-
-    st.success(f"✅ FFmpeg ready")
-
-    # ---- Upload ----
-    uploaded_video = st.file_uploader(
-        "भिडियो अपलोड गर्नुहोस् (MP4, AVI, MKV, MOV, WebM)",
-        type=["mp4", "avi", "mkv", "mov", "webm", "flv", "wmv"],
-        key="video_uploader"
-    )
+    uploaded_video = st.file_uploader("भिडियो अपलोड गर्नुहोस्", type=["mp4", "mov", "avi", "mkv"], key="editor_upload")
 
     if uploaded_video:
-        os.makedirs("temp_videos", exist_ok=True)
-        input_path = os.path.join("temp_videos", uploaded_video.name)
+        os.makedirs("temp_edits", exist_ok=True)
+        input_path = os.path.join("temp_edits", uploaded_video.name)
         with open(input_path, "wb") as f:
             f.write(uploaded_video.getbuffer())
 
-        # ---- Video Preview + Info ----
-        col_preview, col_info = st.columns([1, 1])
-        with col_preview:
-            st.video(input_path)
-        with col_info:
-            info = get_video_info(input_path)
-            if info:
-                st.markdown("### 📊 Video Info")
-                st.metric("Resolution", f"{info['width']}×{info['height']}")
-                st.metric("Duration", f"{int(info['duration'])}s")
-                st.metric("Codec", info["codec"])
-                st.metric("Size", f"{info['size_mb']:.1f} MB")
+        # Video Preview
+        st.video(input_path)
 
-        st.markdown("---")
-
-        # ============================================================
-        # SUB-TABS
-        # ============================================================
-        sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
-            "🎬 HD Convert", "🎤 Voice Changer", "🎬 HD Effect", "🎨 HD Filter", "🎵 Audio Extract"
+        # Tabs for Editor Tools (CapCut जस्तै)
+        edit_tab1, edit_tab2, edit_tab3, edit_tab4, edit_tab5 = st.tabs([
+            "✂️ Trim", "🎵 Music", "🔤 Text", "🎨 Filter", "⚡ Effect"
         ])
 
-        # ---- Sub-tab 1: HD Convert ----
-        with sub_tab1:
-            st.markdown("### 🎬 HD Conversion")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                target_format = st.selectbox("Format", ["mp4", "mkv", "webm"], key="v1_format")
-            with col2:
-                target_res = st.selectbox("Resolution", ["1080p", "720p", "1440p", "2160p", "480p", "360p"], key="v1_res")
-            with col3:
-                quality = st.select_slider("Quality", options=["low", "medium", "high", "ultra"], value="high", key="v1_q")
+        output_path = os.path.join("temp_edits", f"edited_{uploaded_video.name}")
 
-            if st.button("🎬 Convert to HD", type="primary", use_container_width=True, key="v1_convert"):
-                output_name = f"hd_{Path(uploaded_video.name).stem}_{target_res}.{target_format}"
-                output_path = os.path.join("temp_videos", output_name)
-
-                progress = st.progress(0)
-                status = st.empty()
-
-                def update_p(p):
-                    progress.progress(p)
-                    status.text(f"Converting... {p}%")
-
-                result = convert_to_hd(input_path, output_path, resolution=target_res,
-                                       target_format=target_format, quality=quality,
-                                       progress_callback=update_p)
-                if result["success"]:
-                    progress.progress(100)
-                    status.text("✅ Done!")
-                    st.success(f"✅ Converted: {result['size_mb']:.1f} MB")
-                    with open(output_path, "rb") as f:
-                        st.download_button("⬇️ Download HD Video", data=f.read(),
-                                           file_name=output_name, mime=f"video/{target_format}",
-                                           use_container_width=True, key="dl_hd")
-                else:
-                    st.error(f"❌ {result['error']}")
-
-        # ---- Sub-tab 2: Voice Changer ----
-        with sub_tab2:
-            st.markdown("### 🎤 AI Voice Changer")
-            st.caption("Pedalboard AI — pitch shift (quality loss कम)")
-
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                voice_pitch = st.slider("Pitch (semitones)", -12, 12, 4, key="v2_pitch",
-                                        help="+ = गहिरो/मोटो, - = पातलो/उच्च")
-            with col2:
-                st.metric("Current", f"{voice_pitch:+d}")
-
-            if st.button("🎤 Change Voice", type="primary", use_container_width=True, key="v2_change"):
-                temp_audio = os.path.join("temp_videos", f"voice_temp_{Path(uploaded_video.name).stem}.wav")
-                ext = extract_audio(input_path, temp_audio, format="wav")
-                if ext["success"]:
-                    voice_out = os.path.join("temp_videos", f"voice_{Path(uploaded_video.name).stem}.wav")
-                    with st.spinner("🎤 Voice change हुँदै..."):
-                        res = change_voice_pitch(temp_audio, voice_out, semitones=voice_pitch)
-                    if res["success"]:
-                        st.success("✅ Voice changed!")
-                        st.audio(voice_out)
-                        with open(voice_out, "rb") as f:
-                            st.download_button("⬇️ Download Voice Changed", data=f.read(),
-                                               file_name=f"voice_{Path(uploaded_video.name).stem}.wav",
-                                               mime="audio/wav", use_container_width=True, key="dl_voice")
-                    else:
-                        st.error(f"❌ {res['error']}")
-                else:
-                    st.error(f"❌ {ext['error']}")
-
-        # ---- Sub-tab 3: HD Effect ----
-        with sub_tab3:
-            st.markdown("### 🎬 HD Effects")
-            st.caption("Glow, Glitch, CRT, Chromatic, Vintage")
-
+        # ---- 1. TRIM ----
+        with edit_tab1:
+            st.markdown("### ✂️ Trim (काट्ने)")
             col1, col2 = st.columns(2)
             with col1:
-                effect = st.selectbox("Effect", ["glow", "glitch", "crt", "chromatic", "vintage"], key="v3_effect")
+                start_t = st.number_input("Start Time (sec)", 0.0, 600.0, 0.0, key="t_start")
             with col2:
-                intensity = st.select_slider("Intensity", options=["low", "medium", "high"], value="medium", key="v3_int")
+                end_t = st.number_input("End Time (sec)", 0.0, 600.0, 10.0, key="t_end")
 
-            if st.button("🎬 Apply Effect", type="primary", use_container_width=True, key="v3_apply"):
-                effect_out = os.path.join("temp_videos", f"effect_{effect}_{Path(uploaded_video.name).stem}.mp4")
-                with st.spinner(f"🎬 {effect} effect लागू..."):
-                    res = apply_hd_effect(input_path, effect_out, effect=effect, intensity=intensity)
+            if st.button("✂️ Trim Video", type="primary", use_container_width=True):
+                with st.spinner("काट्दै..."):
+                    res = trim_video(input_path, output_path, start_t, end_t)
                 if res["success"]:
-                    st.success(f"✅ {effect} applied!")
-                    with open(effect_out, "rb") as f:
-                        st.download_button(f"⬇️ Download {effect} Video", data=f.read(),
-                                           file_name=f"effect_{effect}_{Path(uploaded_video.name).stem}.mp4",
-                                           mime="video/mp4", use_container_width=True, key="dl_effect")
+                    st.success("✅ Trimmed successfully!")
+                    st.video(output_path)
+                    with open(output_path, "rb") as f:
+                        st.download_button("⬇️ Download Trimmed Video", data=f.read(), file_name="trimmed.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
-        # ---- Sub-tab 4: HD Filter ----
-        with sub_tab4:
-            st.markdown("### 🎨 HD Filters (Color Grading)")
-            st.caption("Cinematic (Orange/Teal), Vibrant, Moody, Warm")
+        # ---- 2. MUSIC ----
+        with edit_tab2:
+            st.markdown("### 🎵 Add Music")
+            audio_file = st.file_uploader("Music अपलोड गर्नुहोस् (MP3)", type=["mp3", "wav"], key="music_upload")
+            volume = st.slider("Volume", 0.0, 1.0, 0.5, key="vol_slider")
 
-            filter_type = st.selectbox("Filter Type", ["cinematic", "vibrant", "moody", "warm"], key="v4_filter",
-                                        help="Cinematic = Hollywood, Vibrant = Instagram, Moody = Dark, Warm = Golden")
+            if audio_file:
+                audio_path = os.path.join("temp_edits", audio_file.name)
+                with open(audio_path, "wb") as f:
+                    f.write(audio_file.getbuffer())
 
-            if st.button("🎨 Apply Filter", type="primary", use_container_width=True, key="v4_apply"):
-                filter_out = os.path.join("temp_videos", f"filter_{filter_type}_{Path(uploaded_video.name).stem}.mp4")
-                with st.spinner(f"🎨 {filter_type} filter लागू..."):
-                    res = apply_hd_filter(input_path, filter_out, filter_type=filter_type)
+                if st.button("🎵 Add Music", type="primary", use_container_width=True):
+                    with st.spinner("गीत मिलाउँदै..."):
+                        res = add_music(input_path, audio_path, output_path, volume)
+                    if res["success"]:
+                        st.success("✅ Music added!")
+                        st.video(output_path)
+                        with open(output_path, "rb") as f:
+                            st.download_button("⬇️ Download with Music", data=f.read(), file_name="music_video.mp4", mime="video/mp4")
+                    else:
+                        st.error(f"❌ {res['error']}")
+
+        # ---- 3. TEXT ----
+        with edit_tab3:
+            st.markdown("### 🔤 Add Text")
+            txt_input = st.text_input("Text लेख्नुहोस्", "Hello World")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                txt_pos = st.selectbox("Position", ["bottom", "center", "top"])
+            with col2:
+                txt_size = st.slider("Size", 20, 100, 50)
+            with col3:
+                txt_color = st.color_picker("Color", "#FFFFFF")
+
+            if st.button("🔤 Add Text", type="primary", use_container_width=True):
+                with st.spinner("टेक्स्ट राख्दै..."):
+                    res = add_text(input_path, output_path, txt_input, txt_pos, txt_size, txt_color)
                 if res["success"]:
-                    st.success(f"✅ {filter_type} applied!")
-                    with open(filter_out, "rb") as f:
-                        st.download_button(f"⬇️ Download {filter_type} Video", data=f.read(),
-                                           file_name=f"filter_{filter_type}_{Path(uploaded_video.name).stem}.mp4",
-                                           mime="video/mp4", use_container_width=True, key="dl_filter")
+                    st.success("✅ Text added!")
+                    st.video(output_path)
+                    with open(output_path, "rb") as f:
+                        st.download_button("⬇️ Download with Text", data=f.read(), file_name="text_video.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
-        # ---- Sub-tab 5: Audio Extract ----
-        with sub_tab5:
-            st.markdown("### 🎵 Audio Extract")
-            audio_fmt = st.selectbox("Format", ["mp3", "wav", "aac"], key="v5_fmt")
+        # ---- 4. FILTER ----
+        with edit_tab4:
+            st.markdown("### 🎨 Filters")
+            filter_type = st.selectbox("Filter Type", ["cinematic", "vibrant", "bw", "warm"], key="f_select")
 
-            if st.button("🎵 Extract Audio", type="primary", use_container_width=True, key="v5_extract"):
-                audio_out = os.path.join("temp_videos", f"audio_{Path(uploaded_video.name).stem}.{audio_fmt}")
-                res = extract_audio(input_path, audio_out, format=audio_fmt)
+            if st.button("🎨 Apply Filter", type="primary", use_container_width=True):
+                with st.spinner("फिल्टर लगाउँदै..."):
+                    res = apply_filter(input_path, output_path, filter_type)
                 if res["success"]:
-                    st.success("✅ Audio extracted!")
-                    st.audio(audio_out)
-                    with open(audio_out, "rb") as f:
-                        mime = "audio/mpeg" if audio_fmt == "mp3" else f"audio/{audio_fmt}"
-                        st.download_button(f"⬇️ Download {audio_fmt.upper()}", data=f.read(),
-                                           file_name=f"audio_{Path(uploaded_video.name).stem}.{audio_fmt}",
-                                           mime=mime, use_container_width=True, key="dl_audio")
+                    st.success("✅ Filter applied!")
+                    st.video(output_path)
+                    with open(output_path, "rb") as f:
+                        st.download_button("⬇️ Download Filtered", data=f.read(), file_name="filtered.mp4", mime="video/mp4")
+                else:
+                    st.error(f"❌ {res['error']}")
+
+        # ---- 5. EFFECT ----
+        with edit_tab5:
+            st.markdown("### ⚡ Effects")
+            effect_type = st.selectbox("Effect Type", ["slowmo", "fastmo"], key="e_select")
+
+            if st.button("⚡ Apply Effect", type="primary", use_container_width=True):
+                with st.spinner("इफेक्ट लगाउँदै..."):
+                    res = apply_effect(input_path, output_path, effect_type)
+                if res["success"]:
+                    st.success("✅ Effect applied!")
+                    st.video(output_path)
+                    with open(output_path, "rb") as f:
+                        st.download_button("⬇️ Download Effect", data=f.read(), file_name="effect_video.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
     else:
         st.info("👆 माथि भिडियो अपलोड गर्नुहोस्")
-                             
+
+# ============================================================
+# 💬 TAB 6: UNIVERSAL AI CAPTION & VIDEO TRANSLATOR
+# ============================================================
+# ⚠️ app.py को माथि यो import थप्न नबिर्सनुहोस्:
+# from caption_translator import translate_srt_gemini
+# from caption_maker import generate_srt
+#from subtitle_tools import burn_subtitles, parse_srt, save_srt
+
+# ============================================================
+# 💬 TAB 6: UNIVERSAL AI CAPTION & VIDEO TRANSLATOR
+# ============================================================
+with tab_caption:
+
+    st.markdown("## 🌍 Universal AI Caption & Translator")
+    st.caption("Whisper AI + Gemini AI + Subtitle Editor")
+
+    uploaded_cap_video = st.file_uploader(
+        "🎬 भिडियो अपलोड गर्नुहोस्",
+        type=["mp4", "mov", "avi", "mkv"],
+        key="caption_video_uploader"
+    )
+
+    if uploaded_cap_video:
+        os.makedirs("temp_captions", exist_ok=True)
+        
+        safe_name = Path(uploaded_cap_video.name).name
+        video_stem = Path(safe_name).stem
+        video_path = os.path.join("temp_captions", safe_name)
+
+        with open(video_path, "wb") as f:
+            f.write(uploaded_cap_video.getbuffer())
+
+        st.video(video_path)
+
+        st.markdown("---")
+        
+        # ---- Settings ----
+        col1, col2 = st.columns(2)
+        with col1:
+            model_size = st.selectbox("🧠 Whisper AI Model", ["small", "medium", "large-v3"], index=0)
+        with col2:
+            source_options = {"🌐 Auto Detect": None, "नेपाली": "ne", "English": "en", "हिन्दी": "hi"}
+            source_name = st.selectbox("🎤 Video Original Language", list(source_options.keys()))
+        
+        selected_lang = source_options[source_name]
+
+        # Target language
+        target_languages_list = ["Nepali", "English", "Hindi", "Chinese", "Japanese", "Korean", "French", "Spanish"]
+        target_language_name = st.selectbox("भिडियोलाई कुन भाषामा अनुवाद गर्ने?", target_languages_list, index=0)
+
+        # ---- Generate Button ----
+        if st.button("🚀 Generate & Translate Captions", type="primary", use_container_width=True, key="generate_caption_btn"):
+            
+            original_srt = os.path.join("temp_captions", f"{video_stem}_original.srt")
+            translated_srt = os.path.join("temp_captions", f"{video_stem}_{target_language_name}.srt")
+
+            with st.spinner(f"🎤 Whisper AI ले आवाज पहिचान गर्दैछ..."):
+                result = generate_srt(video_path, original_srt, model_size=model_size, language=selected_lang)
+
+            if result["success"]:
+                st.success(f"✅ Voice Recognition Complete! ({result['segments']} segments)")
+                
+                with st.spinner(f"🌍 Gemini AI ले {target_language_name} मा अनुवाद गर्दैछ..."):
+                    translation_result = translate_srt_gemini(original_srt, translated_srt, target_language_name)
+
+                if translation_result["success"]:
+                    st.success(f"🎉 Translation Complete! Target: {target_language_name}")
+                    # session state मा सेभ गर्ने
+                    st.session_state['srt_generated'] = True
+                    st.session_state['original_srt'] = original_srt
+                    st.session_state['translated_srt'] = translated_srt
+                else:
+                    st.error(f"❌ Translation Error: {translation_result['error']}")
+
+        # ============================================================
+        # Subtitle Editor & Burn-in (यदि SRT तयार भइसक्यो भने)
+        # ============================================================
+        if st.session_state.get('srt_generated'):
+            st.markdown("---")
+            st.markdown("### 📝 Subtitle Editor & Burn-in")
+            
+            # १. Subtitle Editor
+            srt_to_edit = st.session_state['translated_srt']
+            blocks = parse_srt(srt_to_edit)
+            
+            with st.expander("✏️ Edit Translated Subtitles", expanded=False):
+                edited_blocks = []
+                for b in blocks:
+                    col_t, col_txt = st.columns([1, 4])
+                    with col_t:
+                        st.markdown(f"**{b['time']}**")
+                    with col_txt:
+                        new_text = st.text_area(
+                            f"Line {b['index']}", 
+                            value=b['text'], 
+                            height=68, 
+                            key=f"edit_srt_{b['index']}"
+                        )
+                        edited_blocks.append({
+                            "index": b["index"],
+                            "time": b["time"],
+                            "text": new_text
+                        })
+                
+                if st.button("💾 Save Edited Subtitles"):
+                    save_srt(edited_blocks, srt_to_edit)
+                    st.success("✅ Subtitle updated!")
+                    st.rerun()
+
+            # २. Burn-in Subtitles
+            st.markdown("### 🔥 Burn-in Subtitles (भिडियोमै टाँस्ने)")
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                font_size = st.slider("Font Size", 12, 48, 24)
+            with col_f2:
+                font_color_hex = st.color_picker("Font Color", "#FFFFFF")
+            # Hex to ASS BGR format
+            hex_c = font_color_hex.lstrip("#")
+            font_ass = f"{hex_c[4:6]}{hex_c[2:4]}{hex_c[0:2]}"
+
+            if st.button("🔥 Burn Subtitles into Video", type="primary"):
+                burned_video_path = os.path.join("temp_captions", f"{video_stem}_burned.mp4")
+                
+                with st.spinner("🔥 भिडियोमा क्याप्सन टाँस्दै..."):
+                    res = burn_subtitles(
+                        video_path, 
+                        st.session_state['translated_srt'], 
+                        burned_video_path,
+                        font_size=font_size,
+                        font_color=font_ass
+                    )
+                
+                if res["success"]:
+                    st.success("✅ Subtitle burned successfully!")
+                    st.video(burned_video_path)
+                    
+                    with open(burned_video_path, "rb") as f:
+                        st.download_button(
+                            "⬇️ Download Final Video (Hardcoded Subtitle)",
+                            data=f.read(),
+                            file_name=f"{video_stem}_final.mp4",
+                            mime="video/mp4",
+                            use_container_width=True
+                        )
+                else:
+                    st.error(f"❌ Burn-in error: {res['error']}")
+
+            # ३. Normal Downloads
+            st.markdown("### ⬇️ Download SRT")
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                with open(st.session_state['original_srt'], "rb") as f:
+                    st.download_button("⬇️ Original SRT", data=f.read(), file_name=f"{video_stem}_original.srt", mime="text/plain", use_container_width=True)
+            with col_d2:
+                with open(st.session_state['translated_srt'], "rb") as f:
+                    st.download_button("⬇️ Translated SRT", data=f.read(), file_name=f"{video_stem}_translated.srt", mime="text/plain", use_container_width=True)
+
+    else:
+        st.info("👆 माथि भिडियो अपलोड गरेर आफूले चाहेको भाषामा Subtitle बनाउनुहोस्।")
+                                     
 # ============================================================
 # 👑 ADMIN TAB (Admin भए मात्र)
 # ============================================================
