@@ -8,22 +8,28 @@ def burn_subtitles(video_path, srt_path, output_path, font_size=24, font_color="
     भिडियोमा सिधै Subtitle टाँस्ने (Burn-in)
     """
     try:
-        # FFmpeg को subtitles filter प्रयोग गर्ने
-        # (Windows मा path मा \ हुने भएकोले / मा बदल्नुपर्छ)
-        safe_srt = str(srt_path).replace("\\", "/").replace(":", "\\:")
+        # ✅ SRT भएको फोल्डरमा गएर काम गर्ने (Path escaping बाट बच्न)
+        srt_dir = os.path.dirname(os.path.abspath(srt_path))
+        srt_filename = os.path.basename(srt_path)
         
+        # ✅ FFmpeg का लागि absolute path बनाउने
+        abs_video = os.path.abspath(video_path)
+        abs_output = os.path.abspath(output_path)
+
         # Font style settings
         force_style = f"FontSize={font_size},PrimaryColour=&H{font_color},OutlineColour=&H000000,BorderStyle=1,Outline=2,Shadow=1"
 
+        # ✅ यहाँ 'srt_filename' मात्र प्रयोग गरिएको छ (full path होइन)
         cmd = [
             "ffmpeg", "-y",
-            "-i", video_path,
-            "-vf", f"subtitles='{safe_srt}':force_style='{force_style}'",
+            "-i", abs_video,
+            "-vf", f"subtitles='{srt_filename}':force_style='{force_style}'",
             "-c:a", "copy",
-            output_path
+            abs_output
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        # ✅ cwd (Current Working Directory) SRT भएको फोल्डर सेट गर्ने
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=srt_dir)
         
         if result.returncode == 0:
             return {"success": True, "output_path": output_path}
