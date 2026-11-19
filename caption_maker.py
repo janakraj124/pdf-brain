@@ -58,7 +58,7 @@ def generate_srt(video_path, srt_path, model_size="base", language=None):
     transcribe_params = {
         "beam_size": 5,
         "vad_filter": False,           
-        "word_timestamps": False,
+        "word_timestamps": True,
         "condition_on_previous_text": False,
     }
     
