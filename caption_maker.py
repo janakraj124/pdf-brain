@@ -7,11 +7,16 @@ from faster_whisper import WhisperModel
 _whisper_model = None
 
 def load_whisper_model(model_size="base"):
-    """Whisper model load गर्ने (cache सहित)"""
+    """Whisper model load गर्ने (नेपाली फाइन-ट्युन सहित)"""
     global _whisper_model
     if _whisper_model is None:
-        # CPU मा int8 प्रयोग गर्दा छिटो हुन्छ
-        _whisper_model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        # ✅ नेपालीको लागि विशेष रूपमा तालिम दिइएको मोडेल
+        # यदि तपाईंको इन्टरनेट छैन भने, यसले अटोमेटिक रूपमा डाउनलोड गर्नेछ
+        _whisper_model = WhisperModel(
+            "Dragneel/whisper-medium-nepali-openslr-ct2", 
+            device="cpu", 
+            compute_type="int8"
+        )
     return _whisper_model
 
 
