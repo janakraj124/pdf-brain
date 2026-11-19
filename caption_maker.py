@@ -57,7 +57,7 @@ def generate_srt(video_path, srt_path, model_size="base", language=None):
     # 3. ✅ Powerful Transcribe Settings
     transcribe_params = {
         "beam_size": 5,
-        "vad_filter": False,           # silence (चुप्पा) हटाउने
+        "vad_filter": False,           
         "word_timestamps": False,
         "condition_on_previous_text": False,
     }
