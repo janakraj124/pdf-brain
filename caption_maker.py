@@ -58,7 +58,7 @@ def generate_srt(video_path, srt_path, model_size="base", language=None):
     transcribe_params = {
         "beam_size": 5,
         "vad_filter": False,           
-        "word_timestamps": False,
+        "word_timestamps": True,
         "condition_on_previous_text": False,
     }
     
@@ -70,7 +70,13 @@ def generate_srt(video_path, srt_path, model_size="base", language=None):
     else:
         # Auto Detect को लागि temperature list (fallback)
         transcribe_params["temperature"] = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-
+    # ✅ VAD Parameters (गीत/संगीत भएको भिडियोको लागि)
+    transcribe_params["vad_filter"] = True
+    transcribe_params["vad_parameters"] = {
+        "min_silence_duration_ms": 500, 
+        "threshold": 0.35  # कम आवाजलाई पनि पहिचान गर्न
+    }
+    
     try:
         # Transcribe गर्ने
         segments, info = model.transcribe(temp_audio, **transcribe_params)
