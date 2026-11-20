@@ -24,6 +24,8 @@ from pathlib import Path
 from caption_maker import generate_srt, load_whisper_model
 from caption_translator import translate_srt_gemini
 from subtitle_tools import burn_subtitles, parse_srt, save_srt
+from client_manager import add_client, get_clients, add_project, get_projects, update_project_status
+from file_delivery import create_delivery_link, get_delivery_file
 
 from google_sync import (
     get_google_services, create_spreadsheet, write_dataframe_to_sheet,
@@ -1019,6 +1021,30 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
+# ✅ Client Delivery Download (ग्राहकले लिंक खोल्दा)
+# ============================================================
+delivery_token = st.query_params.get("delivery")
+if delivery_token:
+    from file_delivery import get_delivery_file
+    file_data = get_delivery_file(delivery_token)
+    
+    if file_data:
+        st.title("📦 तपाईंको फाइल तयार छ")
+        st.markdown(f"**प्रोजेक्ट:** {file_data['project_name']}")
+        st.markdown(f"**फाइल:** {file_data['file_name']}")
+        
+        with open(file_data["file_path"], "rb") as f:
+            st.download_button(
+                "⬇️ फाइल डाउनलोड गर्नुहोस्",
+                data=f.read(),
+                file_name=file_data["file_name"],
+                use_container_width=True
+            )
+    else:
+        st.error("❌ यो लिंक अवैध छ वा म्याद सकिएको छ।")
+    st.stop()
+    
+# ============================================================
 # Login Check
 # ============================================================
 if "user" not in st.session_state:
@@ -1369,12 +1395,16 @@ def universal_answer(question, context_type="pdf", context_data=None, username="
 def stream_pdf_answer(question, username="user", target_lang="ne"):
     try:
         from user_vector_store import user_search
+        from cost_tracker import track_cost  # ✅ यो थप्नुहोस्
         from user_manager import get_user_stats
         from google import genai
         from dotenv import load_dotenv
         load_dotenv()
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         MODEL = "gemini-3.5-flash-lite"
+        
+        # ✅ यहाँ खर्च ट्र्याक गर्ने
+        track_cost(username, service="Gemini", amount=0.0001)
         
         lang_instruction = ""
         if target_lang == "en": lang_instruction = "You must reply strictly in English."
@@ -1464,6 +1494,48 @@ def tool_read_any_file(file_path: str):
             return f"Unsupported file type: .{file_ext}. Only PDF, Excel, CSV, TXT are supported for text extraction."
     except Exception as e:
         return f"Error reading file: {e}"
+    
+def tool_web_search(query: str) -> str:
+    """इन्टरनेटबाट ताजा जानकारी खोज्ने"""
+    try:
+        from duckduckgo_search import DDGS
+        # ✅ नयाँ संस्करण अनुसार
+        results = list(DDGS().text(query, max_results=5))
+        
+        if not results:
+            return "कुनै नतिजा भेटिएन।"
+            
+        output = f"🔍 '{query}' को खोज नतिजा:\n\n"
+        for i, res in enumerate(results, 1):
+            output += f"{i}. **{res.get('title', 'No title')}**\n{res.get('body', 'No body')}\nलिङ्क: {res.get('href', '#')}\n\n"
+        return output
+    except Exception as e:
+        return f"Search error: {e}"
+
+def tool_read_webpage(url: str) -> str:
+    """वेबसाइटको लिङ्क खोलेर भित्रको टेक्स्ट पढ्ने"""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # स्क्रिप्ट र स्टाइल हटाउने
+        for script in soup(["script", "style"]):
+            script.decompose()
+            
+        text = soup.get_text()
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        clean_text = '\n'.join(chunk for chunk in chunks if chunk)
+        
+        return clean_text[:4000]  # पहिलो ४००० अक्षर मात्र (AI को सीमा)
+    except Exception as e:
+        return f"Webpage read error: {e}"    
     
 # ============================================================
 # AUTO-PILOT AGENT — Powerful Tools (v2)
@@ -1684,7 +1756,9 @@ AGENT_TOOLS_V2 = [
     tool_google_drive_upload,     # ✅ नयाँ
     tool_google_drive_search,
     tool_analyze_image,
-    #tool_send_whatsapp
+    #tool_send_whatsapp,
+    tool_web_search,
+    tool_read_webpage
 ]
 
 # ============================================================
@@ -2077,6 +2151,16 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
+    
+    # ✅ नयाँ: User Dashboard
+    from user_stats import get_user_dashboard_stats
+    st.markdown("---")
+    st.markdown("### 📊 तपाईंको प्रगति")
+    u_stats = get_user_dashboard_stats(st.session_state.user)
+    st.metric("📄 PDF हरू", u_stats["pdfs"])
+    st.metric("💬 च्याटहरू", u_stats["chats"])
+    st.metric("📊 टेबलहरू", u_stats["tables"])
+    st.metric("🤖 एजेन्ट रन", u_stats["agent_runs"])
 
     # ============================================================
     # 💬 2. MESSENGER ICON
@@ -2383,14 +2467,14 @@ render_sticky_header(st.session_state.user, lang)
 is_admin = st.session_state.get("user_role", "user") == "admin"
 
 if is_admin:
-    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_admin = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_admin = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "👑 Admin Dashboard"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "👑 Admin Dashboard"
     ])
 else:
-    tab1, tab2, tab3, tab4, tab_video, tab_caption = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager"
     ])
     tab_admin = None
     
@@ -2892,15 +2976,23 @@ with tab4:
                     )
                 )
 
-                # सुरुवाती सन्देश
+                # ✅ सुरुवाती सन्देश (Universal Multilingual Support)
                 system_hint = (
                     f"You are a powerful autonomous agent. Your goal: {goal}\n\n"
+                    f"🌍 LANGUAGE RULE:\n"
+                    f"You MUST reply in the EXACT SAME LANGUAGE as the user's goal/request. "
+                    f"(e.g., if the goal is in Spanish, reply in Spanish; if in Japanese, reply in Japanese; if in Nepali, reply in Nepali). "
+                    f"Never translate the user's language to English unless requested.\n\n"
                     f"Rules:\n"
                     f"1. Break the goal into steps. Use tools to gather info, write files, run Python.\n"
                     f"2. Only access folders listed in AGENT_ALLOWED_ROOTS.\n"
-                    f"3. When done, give a clear final answer summarizing what you did.\n"
-                    f"4. If a tool fails, try a different approach.\n"
-                    f"5. Be concise but thorough.\n"
+                    f"3. If the goal asks for current data (price, news, weather, etc.), use **tool_web_search**.\n"
+                    f"4. When showing web search results, **QUOTE THE EXACT NUMBERS** from the search result. Do not guess or approximate.\n"
+                    f"5. If the goal asks to send an email, use **tool_send_email**.\n"
+                    f"6. When done, give a clear final answer summarizing what you did.\n"
+                    f"7. If a tool fails, try a different approach.\n"
+                    f"8. Be concise but thorough.\n"
+                    f"9. CRITICAL FOR WEB SEARCH: If the user asks for live data (price, news), first use **tool_web_search**. Then, use **tool_read_webpage** on the top 1 or 2 links to read the exact details before answering.\n"
                 )
                 response = chat.send_message(system_hint)
 
@@ -2940,10 +3032,14 @@ with tab4:
                             elif tool_name == "tool_google_drive_upload":
                                 result = tool_google_drive_upload(**tool_args)
                             elif tool_name == "tool_google_drive_search":
-                                result = tool_google_drive_search(**tool_args)        
+                                result = tool_google_drive_search(**tool_args)
+                            elif tool_name == "tool_web_search":
+                                result = tool_web_search(**tool_args) 
+                            elif tool_name == "tool_read_webpage":
+                                result = tool_read_webpage(**tool_args)
                             else:
                                 result = f"Unknown tool: {tool_name}"
-
+                                
                             logs.append(f"   ↳ Result: {str(result)[:300]}")
 
                             # Function response with ID (context circulation)
@@ -2951,7 +3047,7 @@ with tab4:
                                 types.Part.from_function_response(
                                     name=tool_name,
                                     response={"result": str(result)},
-                                    id=call_id  # ✅ ID सहित
+                                    #id=call_id  # ✅ ID सहित
                                 )
                             )
 
@@ -3044,21 +3140,27 @@ with tab4:
                 memory_ctx = get_memory_context(st.session_state.user)
                 last_summary = get_latest_summary(st.session_state.user)
 
+                # ✅ Mini Chat को System Hint (Universal Multilingual Support)
+                memory_ctx = get_memory_context(st.session_state.user)
+                last_summary = get_latest_summary(st.session_state.user)
+
                 system_hint = (
                     f"You are a powerful autonomous agent with tools.\n\n"
+                    f"🌍 LANGUAGE RULE:\n"
+                    f"You MUST reply in the EXACT SAME LANGUAGE as the user's question. "
+                    f"(e.g., if the user asks in French, reply in French; if in Arabic, reply in Arabic; if in Nepali, reply in Nepali). "
+                    f"Never translate the user's language to English unless requested.\n\n"
                     f"🧠 LONG-TERM MEMORY:\n{memory_ctx if memory_ctx else '(no memories yet)'}\n\n"
                     f"📝 LAST CONVERSATION SUMMARY:\n{last_summary if last_summary else '(none)'}\n\n"
                     f"📋 Previous result context:\n{agent_context[:2000] if agent_context else '(none)'}\n\n"
                     f"👤 User's request: {mini_q}\n\n"
-                    f"⚠️ Rules:\n"
-                    f"1. Use tools when needed (search files, read files, analyze images, send email, Drive, Sheets, Python).\n"
-                    f"2. Only access folders in AGENT_ALLOWED_ROOTS.\n"
-                    f"3. For images, use tool_analyze_image.\n"
-                    f"4. For email, use tool_send_email.\n"
-                    f"5. Answer in Nepali (or English if question is English).\n"
-                    f"6. Be concise but complete.\n"
-                    f"7. If a tool fails, try a different approach or report the error clearly.\n"
+                    f"⚠️ CRITICAL RULES:\n"
+                    f"1. If user asks for current data (price, news, **weather**, temperature, forecast), use **tool_web_search**.\n"
+                    f"2. When showing web search results, **QUOTE THE EXACT NUMBERS** from the search result.\n"
+                    f"3. If user asks for email, use **tool_send_email**.\n"
+                    f"4. Be concise but complete.\n"
                 )
+                
                 response = chat.send_message(system_hint)
 
                 # ---- Multi-step tool loop ----
@@ -3447,7 +3549,135 @@ with tab_caption:
 
     else:
         st.info("👆 माथि भिडियो अपलोड गरेर आफूले चाहेको भाषामा Subtitle बनाउनुहोस्।")
-                                     
+
+# ============================================================
+# 💼 TAB 7: PROJECT & CLIENT MANAGER (CRM)
+# ============================================================
+with tab_crm:
+    st.markdown("## 💼 Client & Project Manager")
+    st.caption("तपाईंका ग्राहक (Clients) र उनीहरूको काम (Projects) ट्र्याक गर्नुहोस्।")
+
+    # 3 वटा मुख्य Sub-tabs
+    crm_tab1, crm_tab2, crm_tab3 = st.tabs(["📁 Projects", "👥 Clients", "📦 Delivery"])
+
+    # ---- १. Projects Tab ----
+    with crm_tab1:
+        col_h1, col_h2 = st.columns([3, 1])
+        with col_h1:
+            st.markdown("### 📋 सबै कामहरू (Projects)")
+        with col_h2:
+            show_proj_form = st.toggle("➕ नयाँ काम", key="crm_toggle_proj")
+
+        if show_proj_form:
+            with st.form("add_project_form"):
+                st.markdown("#### नयाँ Project थप्नुहोस्")
+                proj_clients = get_clients(st.session_state.user)
+                client_options = {c['name']: c['id'] for c in proj_clients}
+                
+                if not client_options:
+                    st.warning("⚠️ पहिले 'Clients' tab मा गएर ग्राहक थप्नुहोस्।")
+                else:
+                    p_client = st.selectbox("ग्राहक (Client) छान्नुहोस्", list(client_options.keys()))
+                    p_title = st.text_input("कामको नाम (Title)")
+                    p_desc = st.text_area("विवरण (Description)")
+                    p_status = st.selectbox("स्थिति (Status)", ["Pending", "In Progress", "Completed"])
+                    p_budget = st.number_input("बजेट (रु.)", min_value=0.0, step=1000.0)
+                    p_deadline = st.date_input("डेडलाइन (Deadline)")
+                    
+                    if st.form_submit_button("💾 सेभ गर्नुहोस्", type="primary"):
+                        if p_title and p_client:
+                            add_project(
+                                st.session_state.user, client_options[p_client], 
+                                p_title, p_desc, p_status, p_budget, str(p_deadline)
+                            )
+                            st.success("✅ Project थपियो!")
+                            st.rerun()
+                        else:
+                            st.error("कामको नाम र ग्राहक अनिवार्य छ।")
+
+        # Project List
+        st.markdown("---")
+        projects = get_projects(st.session_state.user)
+        if not projects:
+            st.info("कुनै Project छैन। माथिबाट नयाँ थप्नुहोस्।")
+        else:
+            for p in projects:
+                with st.expander(f"{p['title']} — ({p['client_name']}) — {p['status']}", expanded=False):
+                    st.markdown(f"**विवरण:** {p['description']}")
+                    st.markdown(f"**बजेट:** रु. {p['budget']:,.2f} | **डेडलाइन:** {p['deadline']}")
+                    
+                    # Status Change
+                    new_status = st.selectbox(
+                        "स्थिति परिवर्तन गर्नुहोस्", 
+                        ["Pending", "In Progress", "Completed"], 
+                        index=["Pending", "In Progress", "Completed"].index(p['status']),
+                        key=f"status_{p['id']}"
+                    )
+                    if new_status != p['status']:
+                        if st.button("अपडेट गर्नुहोस्", key=f"upd_{p['id']}"):
+                            update_project_status(p['id'], new_status)
+                            st.rerun()
+
+    # ---- २. Clients Tab ----
+    with crm_tab2:
+        col_c1, col_c2 = st.columns([3, 1])
+        with col_c1:
+            st.markdown("### 👥 ग्राहकहरू (Clients)")
+        with col_c2:
+            show_client_form = st.toggle("➕ नयाँ ग्राहक", key="crm_toggle_client")
+
+        if show_client_form:
+            with st.form("add_client_form"):
+                st.markdown("#### नयाँ ग्राहक थप्नुहोस्")
+                c_name = st.text_input("नाम (Name)")
+                c_email = st.text_input("इमेल (Email)")
+                c_phone = st.text_input("फोन (Phone)")
+                c_company = st.text_input("कम्पनी (Company)")
+                
+                if st.form_submit_button("💾 सेव गर्नुहोस्", type="primary"):
+                    if c_name:
+                        add_client(st.session_state.user, c_name, c_email, c_phone, c_company)
+                        st.success("✅ ग्राहक थपियो!")
+                        st.rerun()
+                    else:
+                        st.error("नाम अनिवार्य छ।")
+
+        # Client List
+        st.markdown("---")
+        clients = get_clients(st.session_state.user)
+        if not clients:
+            st.info("कुनै ग्राहक छैन। माथिबाट नयाँ थप्नुहोस्।")
+        else:
+            for c in clients:
+                st.markdown(f"👤 **{c['name']}** ({c['company']}) — 📧 {c['email']} | 📞 {c['phone']}")
+    # ---- ३. Delivery Tab
+    with crm_tab3:
+        st.markdown("### 📦 Final File Delivery")
+        st.caption("ग्राहकलाई फाइल पठाउन सुरक्षित लिंक बनाउनुहोस्।")
+        
+        with st.form("delivery_form"):
+            d_project = st.text_input("प्रोजेक्टको नाम (Project Name)")
+            d_file = st.file_uploader("फाइल अपलोड गर्नुहोस् (PDF, ZIP, Image)", type=["pdf", "zip", "png", "jpg", "docx"])
+            
+            if st.form_submit_button("🔗 लिंक बनाउनुहोस्", type="primary"):
+                if d_file and d_project:
+                    os.makedirs("temp_delivery", exist_ok=True)
+                    file_path = os.path.join("temp_delivery", d_file.name)
+                    with open(file_path, "wb") as f:
+                        f.write(d_file.getbuffer())
+                    
+                    result = create_delivery_link(st.session_state.user, d_project, file_path)
+                    if result["success"]:
+                        # APP_URL .env बाट लिने (जस्तै: https://myapp.streamlit.app)
+                        base_url = os.getenv("APP_URL", "http://localhost:8501")
+                        share_link = f"{base_url}/?delivery={result['token']}"
+                        
+                        st.success("✅ लिंक तयार भयो!")
+                        st.code(share_link, language=None)
+                        st.info("यो लिंक ग्राहकलाई पठाउनुहोस्।")
+                else:
+                    st.error("प्रोजेक्टको नाम र फाइल अनिवार्य छ।")
+                                                                         
 # ============================================================
 # 👑 ADMIN TAB (Admin भए मात्र)
 # ============================================================
