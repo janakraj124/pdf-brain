@@ -26,6 +26,7 @@ from caption_translator import translate_srt_gemini
 from subtitle_tools import burn_subtitles, parse_srt, save_srt
 from client_manager import add_client, get_clients, add_project, get_projects, update_project_status
 from file_delivery import create_delivery_link, get_delivery_file
+from system_tools import get_user_cost, get_total_cost, check_document_quality
 
 from google_sync import (
     get_google_services, create_spreadsheet, write_dataframe_to_sheet,
@@ -116,6 +117,17 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+st.markdown("""
+    <link rel="manifest" href="/static/manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js');
+            });
+        }
+    </script>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # Language Dictionary
@@ -2161,6 +2173,18 @@ with st.sidebar:
     st.metric("💬 च्याटहरू", u_stats["chats"])
     st.metric("📊 टेबलहरू", u_stats["tables"])
     st.metric("🤖 एजेन्ट रन", u_stats["agent_runs"])
+    
+        # ✅ Notification Bell (Sidebar)
+    from notifications import get_unread_notifications, mark_as_read
+    notifs = get_unread_notifications(st.session_state.user)
+    
+    if notifs:
+        with st.expander(f"🔔 नयाँ सूचना ({len(notifs)})", expanded=True):
+            for n in notifs:
+                st.info(f"**{n['title']}**\n\n{n['message']}")
+            if st.button("✅ सबै पढियो"):
+                mark_as_read(st.session_state.user)
+                st.rerun()
 
     # ============================================================
     # 💬 2. MESSENGER ICON
@@ -2467,14 +2491,14 @@ render_sticky_header(st.session_state.user, lang)
 is_admin = st.session_state.get("user_role", "user") == "admin"
 
 if is_admin:
-    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_admin = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_tools, tab_admin = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "👑 Admin Dashboard"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "🛠️ Tools & Cost", "👑 Admin Dashboard"
     ])
 else:
-    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm = st.tabs([
+    tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_tools = st.tabs([
         t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager"
+        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "🛠️ Tools & Cost"
     ])
     tab_admin = None
     
@@ -3668,6 +3692,13 @@ with tab_crm:
                     
                     result = create_delivery_link(st.session_state.user, d_project, file_path)
                     if result["success"]:
+                         # ✅ यहाँ Notification थप्नुहोस्
+                        from notifications import add_notification
+                        add_notification(
+                            st.session_state.user, 
+                            "📦 डेलिभरी सफल", 
+                            f"प्रोजेक्ट '{d_project}' को फाइल ग्राहकलाई पठाइयो।"
+                        )
                         # APP_URL .env बाट लिने (जस्तै: https://myapp.streamlit.app)
                         base_url = os.getenv("APP_URL", "http://localhost:8501")
                         share_link = f"{base_url}/?delivery={result['token']}"
@@ -3677,7 +3708,52 @@ with tab_crm:
                         st.info("यो लिंक ग्राहकलाई पठाउनुहोस्।")
                 else:
                     st.error("प्रोजेक्टको नाम र फाइल अनिवार्य छ।")
-                                                                         
+
+# ============================================================
+# 🛠️ TAB 8: TOOLS & COST TRACKING
+# ============================================================
+with tab_tools:
+    st.markdown("## 🛠️ System Tools & Cost Tracking")
+
+    tool_tab1, tool_tab2 = st.tabs(["💰 API Cost Tracking", "✅ Quality Checker"])
+
+    # ---- Cost Tracking ----
+    with tool_tab1:
+        st.markdown("### तपाईंको API खर्च (Gemini AI)")
+        
+        u_cost = get_user_cost(st.session_state.user)
+        st.metric("कुल खर्च (तपाईंको)", f"${u_cost:.4f}")
+        
+        if st.session_state.get("user_role") == "admin":
+            st.markdown("---")
+            total_c = get_total_cost()
+            st.metric("कुल खर्च (सबै प्रयोगकर्ता)", f"${total_c:.4f}")
+            
+            st.info("💡 **नोट:** प्रत्येक पटक AI प्रयोग गर्दा यहाँ ०.०००१ डलर थपिन्छ।")
+
+    # ---- Quality Checker ----
+    with tool_tab2:
+        st.markdown("### डकुमेन्ट गुणस्तर जाँच (Quality Check)")
+        st.caption("PDF वा CSV फाइल अपलोड गर्नुहोस्, AI ले यसको गुणस्तर जाँच्नेछ।")
+        
+        qc_file = st.file_uploader("फाइल अपलोड गर्नुहोस्", type=["pdf", "csv"])
+        
+        if qc_file:
+            os.makedirs("temp_qc", exist_ok=True)
+            qc_path = os.path.join("temp_qc", qc_file.name)
+            with open(qc_path, "wb") as f:
+                f.write(qc_file.getbuffer())
+                
+            if st.button("🔍 जाँच्नुहोस् (Check Quality)", type="primary"):
+                with st.spinner("AI ले फाइल जाँच्दैछ..."):
+                    res = check_document_quality(qc_path)
+                    
+                if res["success"]:
+                    st.success("✅ जाँच सकियो!")
+                    st.markdown(res["report"])
+                else:
+                    st.error(f"❌ Error: {res['error']}")
+                                                                                             
 # ============================================================
 # 👑 ADMIN TAB (Admin भए मात्र)
 # ============================================================
