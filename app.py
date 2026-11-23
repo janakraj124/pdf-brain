@@ -2449,7 +2449,7 @@ with st.sidebar:
     # ============================================================
     st.markdown(f"""
     <div class="ds-footer">
-        <div class="ds-version">🧠 PDF Brain v52.0</div>
+        <div class="ds-version">🧠 PDF Brain v1.0</div>
         <div class="ds-links">
             <a href="#">Help</a>
             <a href="#">Privacy</a>
