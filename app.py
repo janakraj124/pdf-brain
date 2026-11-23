@@ -1,4 +1,4 @@
-# app.py — PDF Brain v52.0 (Final Full Code with Messenger Fix)
+# app.py — PDF Brain v1.0 (Final Full Code with Messenger Fix)
 import os
 import csv
 import io
@@ -3769,7 +3769,7 @@ st.markdown("---")
 fcol1, fcol2, fcol3 = st.columns(3)
 with fcol1:
     st.markdown("#### 🧠 PDF Brain")
-    st.caption(f"**Version:** 52.0 Pro")
+    st.caption(f"**Version:** 1.0 Pro")
     st.caption(f"**User:** {st.session_state.user}")
 with fcol2:
     st.markdown(f"#### 📊 {t('queries', lang).title()}")
