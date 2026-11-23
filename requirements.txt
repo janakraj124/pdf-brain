@@ -20,4 +20,5 @@ reportlab>=4.2.0
 python-docx>=1.1.0
 PyMuPDF>=1.24.0
 requests>=2.32.0
-nepali-datetime>=0.5.0
+nepali-datetime
+torchvision>=2.0.0
