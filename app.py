@@ -3780,4 +3780,4 @@ with fcol3:
     st.caption(f"✂️ {stats_final['chunks']} chunks")
     st.caption(f"🌐 {lang.upper()}")
 st.markdown("---")
-st.caption(f"**{t('made_with', lang)}** | © 2026 PDF Brain | Powered by Gemini AI")
+st.caption(f"**{t('made_with', lang)}** | © 2026 PDF Brain | Powered by PDF Brain AI")
