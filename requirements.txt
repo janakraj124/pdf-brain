@@ -22,3 +22,4 @@ requests>=2.32.0
 nepali-datetime
 torch
 torchvision
+PyMsgBox
