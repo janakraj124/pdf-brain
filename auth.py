@@ -37,6 +37,7 @@ def _load_users():
                         "login_count": 0,
                         "failed_attempts": 0,
                         "locked_until": None,
+                        "preferred_language": "ne",
                         "profile": {"name": "Admin", "phone": ""}
                     }
                 }
@@ -58,6 +59,7 @@ def _load_users():
                 "login_count": 0,
                 "failed_attempts": 0,
                 "locked_until": None,
+                "preferred_language": "ne",
                 "profile": {"name": "Admin", "phone": ""}
             }
         }
@@ -104,6 +106,19 @@ def _save_json(filepath, data):
         print(f"[SAVE ERROR] {e}")
         return False
 
+def _normalize_language(language, default="ne"):
+    """Language code वैध छ कि छैन जाँच गर्ने"""
+    code = str(language or default).strip().lower()
+    code = code.replace("_", "-").split("-")[0]
+
+    try:
+        from translations import LANGUAGES
+        if code in LANGUAGES:
+            return code
+    except Exception:
+        pass
+
+    return default if default in ("ne", "en", "hi") else "ne"
 
 # ============================================================
 # 🔍 VALIDATION
@@ -141,7 +156,7 @@ def check_password_strength(password):
 # ============================================================
 # 👤 USER MANAGEMENT
 # ============================================================
-def create_user(username, password, email="", role="user"):
+def create_user(username, password, email="", role="user", preferred_language="ne"):
     """नयाँ user बनाउने"""
     users = _load_users()
 
@@ -172,6 +187,7 @@ def create_user(username, password, email="", role="user"):
         "login_count": 0,
         "failed_attempts": 0,
         "locked_until": None,
+        "preferred_language": _normalize_language(preferred_language),
         "profile": {"name": username, "phone": ""}
     }
     _save_users(users)
@@ -211,13 +227,20 @@ def verify_user(username, password):
             users[username]["failed_attempts"] = 0
             _save_users(users)
 
+            # पुरानो Account मा भाषा नभए Default नेपाली राख्ने
+            preferred_language = _normalize_language(
+                user.get("preferred_language", "ne")
+            )
+            users[username]["preferred_language"] = preferred_language
+            
             return True, {
                 "username": username,
                 "role": user.get("role", "user"),
                 "email": user.get("email", ""),
                 "profile": user.get("profile", {}),
                 "last_login": users[username]["last_login"],
-                "login_count": users[username]["login_count"]
+                "login_count": users[username]["login_count"],
+                "preferred_language": preferred_language
             }
         else:
             users[username]["failed_attempts"] = user.get("failed_attempts", 0) + 1
@@ -321,6 +344,7 @@ def list_users():
             "username": u,
             "role": data.get("role", "user"),
             "email": data.get("email", ""),
+            "preferred_language": data.get("preferred_language", "ne"),
             "created": data.get("created", ""),
             "last_login": data.get("last_login", ""),
             "login_count": data.get("login_count", 0),
@@ -339,6 +363,41 @@ def get_user_info(username):
     data.pop("password", None)
     data["username"] = username
     return data
+
+def get_user_language(username, default="ne"):
+    """प्रयोगकर्ताको सुरक्षित भाषा प्राप्त गर्ने"""
+    users = _load_users()
+
+    if username not in users:
+        return _normalize_language(default)
+
+    language = _normalize_language(
+        users[username].get("preferred_language", default),
+        default
+    )
+
+    if users[username].get("preferred_language") != language:
+        users[username]["preferred_language"] = language
+        _save_users(users)
+
+    return language
+
+
+def update_user_language(username, language):
+    """प्रयोगकर्ताको भाषा परिवर्तन गरेर सुरक्षित गर्ने"""
+    users = _load_users()
+
+    if username not in users:
+        return False, "User छैन"
+
+    language = _normalize_language(language)
+
+    users[username]["preferred_language"] = language
+
+    if not _save_users(users):
+        return False, "Language save हुन सकेन"
+
+    return True, f"Language update भयो: {language}"
 
 
 def delete_user(username):
