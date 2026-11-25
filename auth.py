@@ -1,9 +1,8 @@
-# auth.py — PDF Brain (Powerful Auth System v3 — Token + OTP)
+# auth.py — PDF Brain (Secure Auth System v4 — Language + Token + OTP)
 import os
 import json
 import bcrypt
 import re
-import random
 import secrets
 from datetime import datetime, timedelta
 
@@ -13,47 +12,38 @@ OTP_FILE = "reset_otp.json"
 
 
 # ============================================================
-# 📁 FILE HELPERS
+# FILE HELPERS
 # ============================================================
 def _load_users():
-    """Users file पढ्ने (वा bootstrap admin बनाउने)"""
+    """Users file पढ्ने; नभए Streamlit Secrets बाट सुरक्षित Bootstrap Admin बनाउने."""
     if not os.path.exists(USERS_FILE):
-        # ✅ Bootstrap: Streamlit Secrets बाट admin बनाउने
+        bootstrap_user = ""
+        bootstrap_pass = ""
+        bootstrap_email = ""
+
         try:
             import streamlit as st
-            bootstrap_user = st.secrets.get("BOOTSTRAP_ADMIN_USERNAME", "")
-            bootstrap_pass = st.secrets.get("BOOTSTRAP_ADMIN_PASSWORD", "")
-            bootstrap_email = st.secrets.get("BOOTSTRAP_ADMIN_EMAIL", "")
-
-            if bootstrap_user and bootstrap_pass:
-                print(f"🔐 Bootstrap admin बन्दैछ: {bootstrap_user}")
-                default = {
-                    bootstrap_user: {
-                        "password": bcrypt.hashpw(bootstrap_pass.encode(), bcrypt.gensalt()).decode(),
-                        "role": "admin",
-                        "email": bootstrap_email,
-                        "created": datetime.now().isoformat(),
-                        "last_login": None,
-                        "login_count": 0,
-                        "failed_attempts": 0,
-                        "locked_until": None,
-                        "preferred_language": "ne",
-                        "profile": {"name": "Admin", "phone": ""}
-                    }
-                }
-                _save_users(default)
-                return default
+            bootstrap_user = str(st.secrets.get("BOOTSTRAP_ADMIN_USERNAME", "")).strip()
+            bootstrap_pass = str(st.secrets.get("BOOTSTRAP_ADMIN_PASSWORD", "")).strip()
+            bootstrap_email = str(st.secrets.get("BOOTSTRAP_ADMIN_EMAIL", "")).strip()
         except Exception as e:
-            print(f"[BOOTSTRAP WARNING] {e}")
+            print(f"[BOOTSTRAP SECRETS WARNING] {e}")
 
-        # ⚠️ Fallback: यदि secrets छैन भने default admin
-        # (Deploy अघि create_admin.py चलाउनुहोस् — यो fallback पछि हटाउनुहोस्)
-        print("⚠️ BOOTSTRAP secrets भेटिएन — fallback default admin बन्दैछ")
+        if not bootstrap_user or not bootstrap_pass:
+            raise RuntimeError(
+                "Users database भेटिएन र Bootstrap Admin Secrets पनि उपलब्ध छैनन्। "
+                "Streamlit Secrets मा BOOTSTRAP_ADMIN_USERNAME र "
+                "BOOTSTRAP_ADMIN_PASSWORD सेट गर्नुहोस्।"
+            )
+
+        print(f"Bootstrap admin account सिर्जना हुँदैछ: {bootstrap_user}")
         default = {
-            "admin": {
-                "password": bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
+            bootstrap_user: {
+                "password": bcrypt.hashpw(
+                    bootstrap_pass.encode("utf-8"), bcrypt.gensalt()
+                ).decode("utf-8"),
                 "role": "admin",
-                "email": "admin@pdfbrain.com",
+                "email": bootstrap_email,
                 "created": datetime.now().isoformat(),
                 "last_login": None,
                 "login_count": 0,
@@ -63,19 +53,25 @@ def _load_users():
                 "profile": {"name": "Admin", "phone": ""}
             }
         }
-        _save_users(default)
+
+        if not _save_users(default):
+            raise RuntimeError("Bootstrap Admin database save गर्न सकिएन।")
         return default
 
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            users = json.load(f)
+        if not isinstance(users, dict):
+            print("[LOAD ERROR] users.json को format गलत छ (JSON object चाहिन्छ)।")
+            return {}
+        return users
     except Exception as e:
         print(f"[LOAD ERROR] {e}")
         return {}
 
 
 def _save_users(users):
-    """Users file save गर्ने"""
+    """Users JSON file save गर्ने."""
     try:
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(users, f, indent=2, ensure_ascii=False)
@@ -86,45 +82,70 @@ def _save_users(users):
 
 
 def _load_json(filepath):
-    """Generic JSON load"""
+    """Generic JSON load."""
     if not os.path.exists(filepath):
         return {}
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"[JSON LOAD ERROR] {filepath}: {e}")
         return {}
 
 
 def _save_json(filepath, data):
-    """Generic JSON save"""
+    """Generic JSON save."""
     try:
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        print(f"[SAVE ERROR] {e}")
+        print(f"[SAVE ERROR] {filepath}: {e}")
         return False
 
+
+
 def _normalize_language(language, default="ne"):
-    """Language code वैध छ कि छैन जाँच गर्ने"""
+    """Translations मा उपलब्ध language code लाई normalize गर्ने."""
+
     code = str(language or default).strip().lower()
     code = code.replace("_", "-").split("-")[0]
 
+    # Check whether the selected language is supported
     try:
         from translations import LANGUAGES
+
         if code in LANGUAGES:
             return code
-    except Exception:
-        pass
 
-    return default if default in ("ne", "en", "hi") else "ne"
+    except Exception as e:
+        print(f"[LANGUAGE CHECK WARNING] {e}")
+
+    # Normalize fallback language
+    fallback = str(default or "ne").strip().lower()
+    fallback = fallback.replace("_", "-").split("-")[0]
+
+    # Allow all supported fallback languages
+    try:
+        from translations import LANGUAGES
+
+        if fallback in LANGUAGES:
+            return fallback
+
+    except Exception as e:
+        print(f"[LANGUAGE FALLBACK WARNING] {e}")
+
+    # Final default language
+    return "ne"
+
+
 
 # ============================================================
-# 🔍 VALIDATION
+# VALIDATION
 # ============================================================
 def validate_email(email):
-    """Email format जाँच"""
+    """Email format जाँच."""
     if not email:
         return True
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
@@ -132,7 +153,8 @@ def validate_email(email):
 
 
 def validate_username(username):
-    """Username format जाँच"""
+    """Username format जाँच."""
+    username = str(username or "")
     if len(username) < 3:
         return False, "Username कम्तिमा ३ अक्षर"
     if len(username) > 20:
@@ -143,22 +165,32 @@ def validate_username(username):
 
 
 def check_password_strength(password):
-    """Password strength (0-5)"""
+    """Password strength (0-5)."""
+    password = str(password or "")
     score = 0
-    if len(password) >= 8: score += 1
-    if any(c.isupper() for c in password): score += 1
-    if any(c.islower() for c in password): score += 1
-    if any(c.isdigit() for c in password): score += 1
-    if any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password): score += 1
+    if len(password) >= 8:
+        score += 1
+    if any(c.isupper() for c in password):
+        score += 1
+    if any(c.islower() for c in password):
+        score += 1
+    if any(c.isdigit() for c in password):
+        score += 1
+    if any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+        score += 1
     return score
 
 
 # ============================================================
-# 👤 USER MANAGEMENT
+# USER MANAGEMENT
 # ============================================================
 def create_user(username, password, email="", role="user", preferred_language="ne"):
-    """नयाँ user बनाउने"""
+    """नयाँ सामान्य user बनाउने; बाहिरबाट पठाएको role लाई स्वीकार नगर्ने."""
     users = _load_users()
+
+    username = str(username or "").strip()
+    password = str(password or "")
+    email = str(email or "").strip()
 
     valid, msg = validate_username(username)
     if not valid:
@@ -174,13 +206,13 @@ def create_user(username, password, email="", role="user", preferred_language="n
         return False, "Email format गलत"
 
     if email:
-        for u, data in users.items():
-            if data.get("email") == email:
+        for existing_username, data in users.items():
+            if str(data.get("email", "")).lower() == email.lower():
                 return False, "Email पहिले नै प्रयोग भएको छ"
 
     users[username] = {
-        "password": bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
-        "role": role,
+        "password": bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
+        "role": "user",  # सुरक्षा: Signup बाट Admin/Manager बनाउन नदिने
         "email": email,
         "created": datetime.now().isoformat(),
         "last_login": None,
@@ -190,18 +222,22 @@ def create_user(username, password, email="", role="user", preferred_language="n
         "preferred_language": _normalize_language(preferred_language),
         "profile": {"name": username, "phone": ""}
     }
-    _save_users(users)
+
+    if not _save_users(users):
+        return False, "User save हुन सकेन"
     return True, "User सफलतापूर्वक बन्यो"
 
 
 def verify_user(username, password):
-    """Login verify गर्ने"""
+    """Login verify गर्ने."""
     users = _load_users()
+    username = str(username or "").strip()
+    password = str(password or "")
 
     if username not in users:
         for u, data in users.items():
-            if data.get("email", "").lower() == username.lower():
-                username = u   # email → actual username
+            if str(data.get("email", "")).lower() == username.lower():
+                username = u
                 break
         else:
             return False, {}
@@ -213,26 +249,28 @@ def verify_user(username, password):
         try:
             if datetime.now() < datetime.fromisoformat(locked_until):
                 return False, {"locked": True, "until": locked_until}
-            else:
-                users[username]["locked_until"] = None
-                users[username]["failed_attempts"] = 0
-                _save_users(users)
-        except:
-            pass
-
-    try:
-        if bcrypt.checkpw(password.encode(), user["password"].encode()):
-            users[username]["last_login"] = datetime.now().isoformat()
-            users[username]["login_count"] = user.get("login_count", 0) + 1
+            users[username]["locked_until"] = None
             users[username]["failed_attempts"] = 0
             _save_users(users)
+        except (ValueError, TypeError):
+            users[username]["locked_until"] = None
+            users[username]["failed_attempts"] = 0
 
-            # पुरानो Account मा भाषा नभए Default नेपाली राख्ने
+    try:
+        stored_hash = user.get("password", "")
+        if bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
             preferred_language = _normalize_language(
                 user.get("preferred_language", "ne")
             )
             users[username]["preferred_language"] = preferred_language
-            
+            users[username]["last_login"] = datetime.now().isoformat()
+            users[username]["login_count"] = user.get("login_count", 0) + 1
+            users[username]["failed_attempts"] = 0
+            users[username]["locked_until"] = None
+
+            if not _save_users(users):
+                print("[AUTH WARNING] Login details database मा save भएन।")
+
             return True, {
                 "username": username,
                 "role": user.get("role", "user"),
@@ -242,101 +280,119 @@ def verify_user(username, password):
                 "login_count": users[username]["login_count"],
                 "preferred_language": preferred_language
             }
-        else:
-            users[username]["failed_attempts"] = user.get("failed_attempts", 0) + 1
-            if users[username]["failed_attempts"] >= 5:
-                users[username]["locked_until"] = (
-                    datetime.now() + timedelta(minutes=5)
-                ).isoformat()
-            _save_users(users)
-            return False, {"failed": True, "attempts": users[username]["failed_attempts"]}
+
+        users[username]["failed_attempts"] = user.get("failed_attempts", 0) + 1
+        if users[username]["failed_attempts"] >= 5:
+            users[username]["locked_until"] = (
+                datetime.now() + timedelta(minutes=5)
+            ).isoformat()
+        _save_users(users)
+        return False, {
+            "failed": True,
+            "attempts": users[username]["failed_attempts"]
+        }
+
     except Exception as e:
         print(f"[AUTH ERROR] {e}")
-
-    return False, {}
+        return False, {}
 
 
 def update_user_profile(username, name="", email="", phone=""):
-    """User profile update"""
+    """User profile update."""
     users = _load_users()
     if username not in users:
         return False, "User छैन"
 
+    email = str(email or "").strip()
     if email and not validate_email(email):
         return False, "Email format गलत"
 
     if email:
+        for other_username, data in users.items():
+            if other_username != username and str(data.get("email", "")).lower() == email.lower():
+                return False, "Email पहिले नै प्रयोग भएको छ"
         users[username]["email"] = email
+
     if name:
-        if "profile" not in users[username]:
-            users[username]["profile"] = {}
+        users[username].setdefault("profile", {})
         users[username]["profile"]["name"] = name
     if phone:
-        if "profile" not in users[username]:
-            users[username]["profile"] = {}
+        users[username].setdefault("profile", {})
         users[username]["profile"]["phone"] = phone
 
-    _save_users(users)
+    if not _save_users(users):
+        return False, "Profile save हुन सकेन"
     return True, "Profile update भयो"
 
 
 def change_password(username, old_password, new_password):
-    """Password फेर्ने (old verify सहित)"""
+    """पुरानो password verify गरेर password परिवर्तन."""
     users = _load_users()
     if username not in users:
         return False, "User छैन"
 
     try:
-        if not bcrypt.checkpw(old_password.encode(), users[username]["password"].encode()):
+        if not bcrypt.checkpw(
+            str(old_password).encode("utf-8"),
+            users[username]["password"].encode("utf-8")
+        ):
             return False, "पुरानो password गलत"
     except Exception as e:
         return False, f"Error: {e}"
 
+    new_password = str(new_password or "")
     if len(new_password) < 6:
         return False, "नयाँ password कम्तिमा ६ अक्षर"
 
     users[username]["password"] = bcrypt.hashpw(
-        new_password.encode(), bcrypt.gensalt()
-    ).decode()
-    _save_users(users)
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
+    if not _save_users(users):
+        return False, "Password save हुन सकेन"
     return True, "Password फेरियो"
 
 
 def reset_password(username, new_password):
-    """Admin द्वारा password reset"""
+    """Admin workflow बाट password reset (caller मा Admin authorization अनिवार्य)."""
     users = _load_users()
     if username not in users:
         return False, "User छैन"
 
+    new_password = str(new_password or "")
     if len(new_password) < 6:
         return False, "Password कम्तिमा ६ अक्षर"
 
     users[username]["password"] = bcrypt.hashpw(
-        new_password.encode(), bcrypt.gensalt()
-    ).decode()
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
     users[username]["failed_attempts"] = 0
     users[username]["locked_until"] = None
-    _save_users(users)
+
+    if not _save_users(users):
+        return False, "Password reset save हुन सकेन"
     return True, "Password reset भयो"
 
 
 def update_user_role(username, new_role):
-    """Admin द्वारा role change"""
+    """Role change helper; caller ले Admin authorization जाँच गर्नैपर्छ."""
     users = _load_users()
     if username not in users:
         return False, "User छैन"
     if new_role not in ["user", "manager", "admin"]:
         return False, "Invalid role"
+
     users[username]["role"] = new_role
-    _save_users(users)
+    if not _save_users(users):
+        return False, "Role save हुन सकेन"
     return True, f"Role → {new_role}"
 
 
 # ============================================================
-# 📋 LIST & STATS
+# LIST & STATS
 # ============================================================
 def list_users():
-    """सबै users list (stats सहित)"""
+    """सबै users list (stats र language सहित)."""
     users = _load_users()
     result = []
     for u, data in users.items():
@@ -344,7 +400,7 @@ def list_users():
             "username": u,
             "role": data.get("role", "user"),
             "email": data.get("email", ""),
-            "preferred_language": data.get("preferred_language", "ne"),
+            "preferred_language": _normalize_language(data.get("preferred_language", "ne")),
             "created": data.get("created", ""),
             "last_login": data.get("last_login", ""),
             "login_count": data.get("login_count", 0),
@@ -355,74 +411,68 @@ def list_users():
 
 
 def get_user_info(username):
-    """एक user को पूरा info"""
+    """एक user को पूरा info (password बिना)."""
     users = _load_users()
     if username not in users:
         return None
     data = users[username].copy()
     data.pop("password", None)
     data["username"] = username
+    data["preferred_language"] = _normalize_language(data.get("preferred_language", "ne"))
     return data
 
-def get_user_language(username, default="ne"):
-    """प्रयोगकर्ताको सुरक्षित भाषा प्राप्त गर्ने"""
-    users = _load_users()
 
+def get_user_language(username, default="ne"):
+    """प्रयोगकर्ताको सुरक्षित भाषा प्राप्त गर्ने; पुरानो Account migrate गर्ने."""
+    users = _load_users()
     if username not in users:
         return _normalize_language(default)
 
     language = _normalize_language(
-        users[username].get("preferred_language", default),
-        default
+        users[username].get("preferred_language", default), default
     )
-
     if users[username].get("preferred_language") != language:
         users[username]["preferred_language"] = language
         _save_users(users)
-
     return language
 
 
 def update_user_language(username, language):
-    """प्रयोगकर्ताको भाषा परिवर्तन गरेर सुरक्षित गर्ने"""
+    """प्रयोगकर्ताको भाषा परिवर्तन गरेर सुरक्षित गर्ने."""
     users = _load_users()
-
     if username not in users:
         return False, "User छैन"
 
     language = _normalize_language(language)
-
     users[username]["preferred_language"] = language
 
     if not _save_users(users):
         return False, "Language save हुन सकेन"
-
     return True, f"Language update भयो: {language}"
 
 
 def delete_user(username):
-    """User हटाउने (admin बाहेक)"""
+    """User हटाउने; admin account हटाउन नदिने."""
     users = _load_users()
-    if username in users and username != "admin":
+    if username in users and users[username].get("role") != "admin":
         del users[username]
-        _save_users(users)
-        return True
+        if _save_users(users):
+            return True
     return False
 
 
 def unlock_user(username):
-    """Locked user unlock"""
+    """Locked user unlock."""
     users = _load_users()
     if username in users:
         users[username]["locked_until"] = None
         users[username]["failed_attempts"] = 0
-        _save_users(users)
-        return True
+        return _save_users(users)
     return False
 
 
 # ============================================================
-# 🔗 TOKEN-BASED RESET (Link)
+# TOKEN-BASED RESET (Link)
 # ============================================================
 def _load_tokens():
     return _load_json(RESET_TOKEN_FILE)
@@ -433,15 +483,16 @@ def _save_tokens(tokens):
 
 
 def generate_reset_token(username, email=None):
-    """Reset token बनाउने (१ घण्टा valid)"""
+    """Password reset token (१ घण्टा valid)."""
     users = _load_users()
-
     if username not in users:
         return None, "User भेटिएन"
 
-    user_email = email or users[username].get("email", "")
+    user_email = str(email or users[username].get("email", "")).strip()
     if not user_email:
         return None, "User को email छैन"
+    if user_email.lower() != str(users[username].get("email", "")).lower():
+        return None, "Account email मिलेन"
 
     token = secrets.token_urlsafe(32)
     expiry = (datetime.now() + timedelta(hours=1)).isoformat()
@@ -454,50 +505,48 @@ def generate_reset_token(username, email=None):
         "expiry": expiry,
         "used": False
     }
-    _save_tokens(tokens)
-
+    if not _save_tokens(tokens):
+        return None, "Reset token save हुन सकेन"
     return token, "Token सिर्जना भयो"
 
 
 def find_user_by_email(email):
-    """Email बाट username खोज्ने"""
+    """Email बाट username खोज्ने."""
+    email = str(email or "").strip().lower()
     users = _load_users()
     for username, data in users.items():
-        if data.get("email", "").lower() == email.lower():
+        if str(data.get("email", "")).lower() == email:
             return username
     return None
 
 
 def verify_reset_token(token):
-    """Token valid छ कि जाँच्ने"""
+    """Token valid छ कि जाँच्ने."""
     tokens = _load_tokens()
-
     if token not in tokens:
         return False, "Token गलत छ"
 
     data = tokens[token]
-
     if data.get("used"):
         return False, "Token पहिले नै प्रयोग भइसक्यो"
 
     try:
         if datetime.now() > datetime.fromisoformat(data["expiry"]):
             return False, "Token expired (१ घण्टा पछि)"
-    except:
+    except (ValueError, KeyError, TypeError):
         return False, "Token गलत"
 
     return True, data["username"]
 
 
 def consume_reset_token(token, new_password):
-    """Token प्रयोग गरेर password reset"""
+    """Token प्रयोग गरेर password reset."""
     valid, result = verify_reset_token(token)
-
     if not valid:
         return False, result
 
     username = result
-
+    new_password = str(new_password or "")
     if len(new_password) < 6:
         return False, "Password कम्तिमा ६ अक्षर"
 
@@ -506,23 +555,26 @@ def consume_reset_token(token, new_password):
         return False, "User भेटिएन"
 
     users[username]["password"] = bcrypt.hashpw(
-        new_password.encode(), bcrypt.gensalt()
-    ).decode()
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
     users[username]["failed_attempts"] = 0
     users[username]["locked_until"] = None
-    _save_users(users)
+
+    if not _save_users(users):
+        return False, "Password save हुन सकेन"
 
     tokens = _load_tokens()
     if token in tokens:
         tokens[token]["used"] = True
         tokens[token]["used_at"] = datetime.now().isoformat()
-        _save_tokens(tokens)
+        if not _save_tokens(tokens):
+            return False, "Reset token update हुन सकेन"
 
     return True, f"Password reset भयो ({username})"
 
 
 # ============================================================
-# 🔢 OTP-BASED RESET (६-अंक Code)
+# OTP-BASED RESET (6-digit code)
 # ============================================================
 def _load_otps():
     return _load_json(OTP_FILE)
@@ -533,17 +585,18 @@ def _save_otps(otps):
 
 
 def generate_otp(username, email=None):
-    """६-अंकको OTP बनाउने (५ मिनेट valid)"""
+    """६-अंकको OTP (५ मिनेट valid)."""
     users = _load_users()
-
     if username not in users:
         return None, "User भेटिएन"
 
-    user_email = email or users[username].get("email", "")
+    user_email = str(email or users[username].get("email", "")).strip()
     if not user_email:
         return None, "User को email छैन"
+    if user_email.lower() != str(users[username].get("email", "")).lower():
+        return None, "Account email मिलेन"
 
-    otp_code = str(random.randint(100000, 999999))
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
     expiry = (datetime.now() + timedelta(minutes=5)).isoformat()
 
     otps = _load_otps()
@@ -555,33 +608,31 @@ def generate_otp(username, email=None):
         "attempts": 0,
         "used": False
     }
-    _save_otps(otps)
-
+    if not _save_otps(otps):
+        return None, "OTP save हुन सकेन"
     return otp_code, "OTP सिर्जना भयो"
 
 
 def verify_otp(username, otp_code):
-    """OTP valid छ कि जाँच्ने"""
+    """OTP valid छ कि जाँच्ने."""
     otps = _load_otps()
-
     if username not in otps:
         return False, "OTP भेटिएन। फेरि अनुरोध गर्नुहोस्।"
 
     data = otps[username]
-
     if data.get("used"):
         return False, "OTP पहिले नै प्रयोग भइसक्यो"
 
     try:
         if datetime.now() > datetime.fromisoformat(data["expiry"]):
             return False, "OTP expired (५ मिनेट पछि)"
-    except:
+    except (ValueError, KeyError, TypeError):
         return False, "OTP गलत"
 
     if data.get("attempts", 0) >= 3:
         return False, "धेरै पटक गलत। नयाँ OTP अनुरोध गर्नुहोस्।"
 
-    if str(otp_code).strip() != data["otp"]:
+    if not secrets.compare_digest(str(otp_code).strip(), str(data.get("otp", ""))):
         otps[username]["attempts"] = data.get("attempts", 0) + 1
         _save_otps(otps)
         remaining = 3 - otps[username]["attempts"]
@@ -591,12 +642,12 @@ def verify_otp(username, otp_code):
 
 
 def reset_password_with_otp(username, otp_code, new_password):
-    """OTP verify गरेर password reset"""
+    """OTP verify गरेर password reset."""
     valid, result = verify_otp(username, otp_code)
-
     if not valid:
         return False, result
 
+    new_password = str(new_password or "")
     if len(new_password) < 6:
         return False, "Password कम्तिमा ६ अक्षर"
 
@@ -605,36 +656,31 @@ def reset_password_with_otp(username, otp_code, new_password):
         return False, "User भेटिएन"
 
     users[username]["password"] = bcrypt.hashpw(
-        new_password.encode(), bcrypt.gensalt()
-    ).decode()
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
     users[username]["failed_attempts"] = 0
     users[username]["locked_until"] = None
-    _save_users(users)
+
+    if not _save_users(users):
+        return False, "Password save हुन सकेन"
 
     otps = _load_otps()
     if username in otps:
         otps[username]["used"] = True
         otps[username]["used_at"] = datetime.now().isoformat()
-        _save_otps(otps)
+        if not _save_otps(otps):
+            return False, "OTP status save हुन सकेन"
 
     return True, f"Password reset भयो ({username})"
 
 
 # ============================================================
-# 🧪 TEST
+# BASIC SELF-TEST (admin credentials वा वास्तविक database modify नगर्ने)
 # ============================================================
 if __name__ == "__main__":
-    print("🧪 Testing auth.py...\n")
-
-    ok, user = verify_user("admin", "admin123")
-    print(f"Admin login: {'✅' if ok else '❌'} — role: {user.get('role') if ok else 'N/A'}")
-
-    ok, msg = create_user("testuser", "test123456", "test@example.com")
-    print(f"Create user: {'✅' if ok else '❌'} — {msg}")
-
-    ok, user = verify_user("testuser", "test123456")
-    print(f"Test login: {'✅' if ok else '❌'} — role: {user.get('role') if ok else 'N/A'}")
-
-    print(f"\n📋 Users:")
-    for u in list_users():
-        print(f"   • {u['username']} ({u['role']}) — last login: {u['last_login'][:10] if u['last_login'] else 'never'}")
+    print("auth.py syntax/import self-test")
+    print("Language normalizer:", _normalize_language("ne"))
+    print("Password strength helper:", check_password_strength("Test123!"))
+    print("Email validator:", validate_email("test@example.com"))
+    print("Username validator:", validate_username("testuser"))
+    print("Auth module self-test completed.")

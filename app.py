@@ -28,6 +28,15 @@ from client_manager import add_client, get_clients, add_project, get_projects, u
 from file_delivery import create_delivery_link, get_delivery_file
 from system_tools import get_user_cost, get_total_cost, check_document_quality
 
+from translations import LANGUAGES, TRANSLATIONS
+
+# ✅ एक मात्र सही t() फंक्शन
+def t(key, lang=None):
+    if lang is None:
+        lang = st.session_state.get("ui_lang", "en")
+    lang_dict = TRANSLATIONS.get(lang, TRANSLATIONS.get("en", {}))
+    return lang_dict.get(key, key)
+
 from google_sync import (
     get_google_services, create_spreadsheet, write_dataframe_to_sheet,
     read_sheet_as_dataframe, upload_file_to_drive, list_drive_files,
@@ -129,192 +138,7 @@ st.markdown("""
     </script>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# Language Dictionary
-# ============================================================
-UI_TEXT = {
-    "ne": {
-        "chat_tab": "💬 Chat", "docs_tab": "📄 Documents", "image_tab": "🖼️ Image", "table_tab": "📊 Table + Chart",
-        "agent_tab": "🤖 Auto-Pilot Agent", "chat_welcome": "नमस्ते! के सोध्नु छ?", "chat_hint": "तल chat box मा प्रश्न लेख्नुहोस्",
-        "chat_input": "प्रश्न लेख्नुहोस्...", "queries": "queries", "no_tags": "कोही छैन",
-        "logout": "🚪 Logout", "ui_language": "UI भाषा", "database_ready": "Database तयार", "database_missing": "Database छैन",
-        "actions": "Actions", "rebuild": "🔄 Rebuild", "chat_clear": "➕ New Chat", "export_chat": "💾 Export Chat",
-        "no_chat": "कुनै chat छैन", "voice_settings": "🎤 Voice Settings", "auto_speak": "🔊 Auto-speak",
-        "input_lang": "🎤 Input भाषा", "output_lang": "🔊 Output भाषा", "doc_tags": "🏷️ Document Tags",
-        "chat_tag_filter": "Tag Filter", "filter_remove": "✖ हटाउनुहोस्", "filter_active": "Tag Filter Active",
-        "filter_hint": "यी tags भएका PDF मा मात्र खोजिन्छ", "no_tags_available": "कुनै tags छैन",
-        "admin_panel": "👑 Admin Panel", "users": "users", "deleted": "हटाइयो",
-        "my_docs": "मेरो Documents", "upload_doc": "नयाँ Document Upload", "upload_hint": "PDF, DOCX, Image, TXT — कुनै पनि (एकैपटक धेरै हाल्न सकिन्छ)",
-        "upload_process": "📤 Upload + Process", "uploading": "Upload हुँदै...", "processing": "Process हुँदै...",
-        "files_saved": "files save भयो", "ai_ready": "AI तयार!", "my_files": "मेरा Files", "no_files": "कुनै document छैन।",
-        "ask_docs": "💬 Documents बारे सोध्नुहोस्", "ask_hint": "प्रश्न लेख्नुहोस् वा 🎤 थिच्नुहोस्",
-        "ask_placeholder": "जस्तै: यो document कसको हो?", "ask_btn": "🔍 सोध्नुहोस्", "clear_btn": "🗑️ Clear",
-        "your_question": "तपाईंको प्रश्न", "ai_answer": "AI जवाफ", "thinking": "सोच्दै...", "analyzing": "विश्लेषण...",
-        "image_analysis": "Image Analysis", "image_hint": "जस्तो सुकै image — AI ले बुझ्छ (एकैपटक धेरै हाल्न सकिन्छ)", "upload_image": "Image हाल्नुहोस्",
-        "analysis_type": "Analysis प्रकार", "analyze_btn": "🔍 Analyze", "delete_btn": "🗑️ हटाउनुहोस्",
-        "result": "परिणाम", "upload_prompt": "👈 Image upload गर्नुहोस्", "image_question": "💬 Image बारे सोध्नुहोस्",
-        "image_placeholder": "जस्तै: कति amount छ?", "table_chart": "Table + Chart Analysis",
-        "table_hint": "PDF, Excel, CSV, Image बाट tables निकालेर Excel मा बदल्नुहोस् (एकैपटक धेरै हाल्न सकिन्छ)", "pdf_select": "File चयन", "tables_found": "tables भेटियो",
-        "no_table": "Table भेटिएन", "no_pdf": "docs/ मा File छैन", "no_docs_folder": "docs/ folder छैन",
-        "data_tab": "📄 Data", "chart_tab": "📈 Chart", "stats_tab": "📊 Stats", "table_question": "💬 Table बारे सोध्नुहोस्",
-        "table_placeholder": "जस्तै: सबैभन्दा ठूलो amount कति?", "voice_label": "🎤 Voice", "ai_label": "🧠 AI जवाफ",
-        "made_with": "Made with ❤️ in Nepal", "feedback_thanks": "धन्यवाद!", "copy_btn": "Copy", "speak_btn": "सुन्नुहोस्",
-        "like_btn": "राम्रो", "dislike_btn": "नराम्रो", "footer_about": "AI-powered PDF assistant",
-        "footer_links": "Links", "voice_hint": "🎤 थिच्नुहोस् → बोल्नुहोस् → Text auto-fill", "download_excel": "📥 Excel Download", "download_csv": "📥 CSV Download",
-        "ai_report_btn": "🤖 AI Business Report तयार गर्नुहोस्", "ai_report_title": "🤖 AI Business Analysis Report",
-        "ai_report_desc": "AI ले तपाईंको डाटा विश्लेषण गरेर व्यवसायिक रिपोर्ट तयार गर्छ।",
-        "upload_new_file": "📤 नयाँ File अपलोड गर्नुहोस् (PDF, Excel, CSV, Image)",
-        "select_from_docs": "📁 docs/ फोल्डरबाट छान्नुहोस्", "where_extract": "Table कहाँबाट निकाल्ने?",
-        "upload_file_label": "File हाल्नुहोस्", "extract_tables_btn": "📊 Tables निकाल्नुहोस्",
-        "extracting": "Tables निकाल्दै...", "table_found_msg": "tables भेटियो —",
-        "image_table_msg": "Image बाट Table निकालियो (AI ले पढेको):",
-        "download_img_excel": "📥 Download Extracted Table as Excel (.xlsx)",
-        "ai_parse_error": "AI ले टेबल सफा फर्म्याटमा दिएन। तलको टेक्स्ट कपी गर्नुहोस्:",
-        "download_report": "📥 Download Report (.txt)", "sum": "जोड (Sum)", "avg": "औसत (Avg)", "min": "न्यूनतम (Min)", "max": "अधिकतम (Max)", "no_numeric": "Numeric column छैन",
-        "chat_history": "च्याटहरू", "doc_history": "PDF हरू", "img_history": "Image हरू", "table_history": "Table हरू",
-        "no_history": "कुनै इतिहास छैन", "online": "अनलाइन", "messages": "सन्देशहरू", "copy_answer": "📋 Copy Answer",
-        "friends": "साथीहरू", "add_friend": "साथी थप्नुहोस्", "pending": "पर्खाइमा", "accept": "स्वीकार", "reject": "अस्वीकार", "message": "सन्देश",
-        "messenger": "Messenger", "active_now": "अहिले सक्रिय", "search": "खोज्नुहोस्...", "no_messages": "अहिलेसम्म कुनै सन्देश छैन", "type_msg": "सन्देश लेख्नुहोस्...",
-        "share_btn": "📤 Share / Send", "send_to_messenger": "Messenger मा पठाउनुहोस्", "send_to_gmail": "Gmail मा पठाउनुहोस्",
-        "enter_email": "इमेल ठेगाना लेख्नुहोस्", "send_email_btn": "📧 Email पठाउनुहोस्", "attached_file": "📎 फाइल संलग्न",
-        "download_file": "⬇️ डाउनलोड गर्नुहोस्", "file_upload_label": "📎 फाइल अपलोड गर्नुहोस्",
-        "send_success": "सफलतापूर्वक पठाइयो!", "share_report": "रिपोर्ट सेयर गर्नुहोस्",
-        "team_share": "टिमलाई सेयर गर्नुहोस् (Multi-Select)", "select_members": "सदस्यहरू छान्नुहोस्",
-        "data_edit_hint": "तपाईं यहाँ डाटा सिधै सम्पादन (Edit) गर्न सक्नुहुन्छ।", "save_changes": "परिवर्तन सेभ गर्नुहोस्",
-        "back_to_chats": "🔙 च्याटहरूमा फर्कनुहोस्", "send_file": "फाइल पठाउनुहोस्",
-        "img_gen_not_supported": "माफ गर्नुहोला, यो AI मोडेलले फोटो बनाउन (Generate) वा परिवर्तन गर्न (Edit) सक्दैन। यसले फोटो पढ्न र विश्लेषण गर्न मात्र सक्छ।",
-        "forensic_btn": "🕵️‍♂️ Forensic Check (Fake Detector)", "forensic_hint": "यो फाइल वा तालिका फेक (Fake) हो कि असली (Original)? AI लाई सोध्नुहोस्।",
-        "forensic_analyzing": "फाइल फोरेन्सिक विश्लेषण हुँदैछ...", "forensic_result": "🕵️‍♂️ फोरेन्सिक रिपोर्ट",
-        "agent_goal": "तपाईंको लक्ष्य के हो?", "agent_goal_placeholder": "जस्तै: 'C:\\Users\\Dell\\Desktop\\company_brain\\docs भित्रको sample-table.pdf पढेर मलाई सारांश दिनु'",
-        "agent_run_btn": "🚀 Auto-Pilot Agent लाई काम दिनुहोस्", "agent_working": "एजेन्ट आफैंले काम गर्दैछ...", "agent_success": "काम सम्पन्न भयो!",
-        "agent_tools": "एजेन्टले प्रयोग गर्ने उपकरणहरू (Tools)", "agent_logs": "एजेन्टको कामको लग (Logs)",
-        "agent_local_path": "स्थानीय कम्प्युटरको फाइल बाट काम गर्नुहोस् (Local Path)", "agent_path_hint": "C:\\Users\\... वा D:\\... को पूरा बाटो हाल्नुहोस्",
-        "multi_upload_hint": "तपाईंले एकैपटक धेरै फाइलहरू छानेर अपलोड गर्न सक्नुहुन्छ।",
-        "new_msg": "नयाँ सन्देश", "new_req": "नयाँ रिक्वेस्ट"
-    },
-    "en": {
-        "chat_tab": "💬 Chat", "docs_tab": "📄 Documents", "image_tab": "🖼️ Image", "table_tab": "📊 Table + Chart",
-        "agent_tab": "🤖 Auto-Pilot Agent", "chat_welcome": "Hello! What would you like to ask?", "chat_hint": "Type your question in the chat box below",
-        "chat_input": "Type your question...", "queries": "queries", "no_tags": "None",
-        "logout": "🚪 Logout", "ui_language": "UI Language", "database_ready": "Database Ready", "database_missing": "Database Missing",
-        "actions": "Actions", "rebuild": "🔄 Rebuild", "chat_clear": "➕ New Chat", "export_chat": "💾 Export Chat",
-        "no_chat": "No chat yet", "voice_settings": "🎤 Voice Settings", "auto_speak": "🔊 Auto-speak",
-        "input_lang": "🎤 Input Language", "output_lang": "🔊 Output Language", "doc_tags": "🏷️ Document Tags",
-        "chat_tag_filter": "Tag Filter", "filter_remove": "✖ Remove Filter", "filter_active": "Tag Filter Active",
-        "filter_hint": "Searching only in tagged PDFs", "no_tags_available": "No tags",
-        "admin_panel": "👑 Admin Panel", "users": "users", "deleted": "Deleted",
-        "my_docs": "My Documents", "upload_doc": "Upload New Document", "upload_hint": "PDF, DOCX, Image, TXT — upload any (multiple files allowed)",
-        "upload_process": "📤 Upload + Process", "uploading": "Uploading...", "processing": "Processing...",
-        "files_saved": "files saved", "ai_ready": "AI Ready!", "my_files": "My Files", "no_files": "No documents yet.",
-        "ask_docs": "💬 Ask about Documents", "ask_hint": "Type question or tap 🎤",
-        "ask_placeholder": "e.g., Whose document is this?", "ask_btn": "🔍 Ask", "clear_btn": "🗑️ Clear",
-        "your_question": "Your Question", "ai_answer": "AI Answer", "thinking": "Thinking...", "analyzing": "Analyzing...",
-        "image_analysis": "Image Analysis", "image_hint": "Any image — AI understands (multiple allowed)", "upload_image": "Upload Image",
-        "analysis_type": "Analysis Type", "analyze_btn": "🔍 Analyze", "delete_btn": "🗑️ Delete",
-        "result": "Result", "upload_prompt": "👈 Upload an image", "image_question": "💬 Ask about Image",
-        "image_placeholder": "e.g., What is the amount?", "table_chart": "Table + Chart Analysis",
-        "table_hint": "Convert Tables from PDF, Excel, CSV, Image to Excel (multiple allowed)", "pdf_select": "Select File", "tables_found": "tables found",
-        "no_table": "No table found", "no_pdf": "No Files in docs/", "no_docs_folder": "docs/ folder missing",
-        "data_tab": "📄 Data", "chart_tab": "📈 Chart", "stats_tab": "📊 Stats", "table_question": "💬 Ask about Table",
-        "table_placeholder": "e.g., What is the largest amount?", "voice_label": "🎤 Voice", "ai_label": "🧠 AI Answer",
-        "made_with": "Made with ❤️ in Nepal", "feedback_thanks": "Thanks!", "copy_btn": "Copy", "speak_btn": "Speak",
-        "like_btn": "Like", "dislike_btn": "Dislike", "footer_about": "AI-powered PDF assistant",
-        "footer_links": "Links", "voice_hint": "🎤 Tap → Speak → Text auto-fills", "download_excel": "📥 Excel Download", "download_csv": "📥 CSV Download",
-        "ai_report_btn": "🤖 Generate AI Business Report", "ai_report_title": "🤖 AI Business Analysis Report",
-        "ai_report_desc": "AI analyzes your data and generates a professional business report.",
-        "upload_new_file": "📤 Upload New File (PDF, Excel, CSV, Image)",
-        "select_from_docs": "📁 Select from docs/ folder", "where_extract": "Where to extract Table from?",
-        "upload_file_label": "Upload File", "extract_tables_btn": "📊 Extract Tables",
-        "extracting": "Extracting tables...", "table_found_msg": "tables found —",
-        "image_table_msg": "Table extracted from Image (AI recognized):",
-        "download_img_excel": "📥 Download Extracted Table as Excel (.xlsx)",
-        "ai_parse_error": "AI could not format the table properly. Copy the text below:",
-        "download_report": "📥 Download Report (.txt)", "sum": "Sum", "avg": "Average", "min": "Minimum", "max": "Maximum", "no_numeric": "No Numeric column",
-        "chat_history": "Chats", "doc_history": "PDFs", "img_history": "Images", "table_history": "Tables",
-        "no_history": "No history yet", "online": "Online", "messages": "messages", "copy_answer": "📋 Copy Answer",
-        "friends": "Friends", "add_friend": "Add Friend", "pending": "Pending", "accept": "Accept", "reject": "Reject", "message": "Message",
-        "messenger": "Messenger", "active_now": "Active Now", "search": "Search...", "no_messages": "No messages yet", "type_msg": "Type a message...",
-        "share_btn": "📤 Share / Send", "send_to_messenger": "Send via Messenger", "send_to_gmail": "Send via Gmail",
-        "enter_email": "Enter Email Address", "send_email_btn": "📧 Send Email", "attached_file": "📎 File Attached",
-        "download_file": "⬇️ Download File", "file_upload_label": "📎 Upload File",
-        "send_success": "Sent successfully!", "share_report": "Share Report",
-        "team_share": "Share with Team (Multi-Select)", "select_members": "Select Members",
-        "data_edit_hint": "You can edit the data directly here.", "save_changes": "Save Changes",
-        "back_to_chats": "🔙 Back to Chats", "send_file": "Send File",
-        "img_gen_not_supported": "Sorry, this AI model cannot generate or edit images. It can only analyze and read images.",
-        "forensic_btn": "🕵️‍♂️ Forensic Check (Fake Detector)", "forensic_hint": "Is this file/table Fake or Original? Ask AI.",
-        "forensic_analyzing": "Analyzing forensics...", "forensic_result": "🕵️‍♂️ Forensic Report",
-        "agent_goal": "What is your goal?", "agent_goal_placeholder": "e.g., 'Read sample-table.pdf in C:\\Users\\Dell\\Desktop\\company_brain\\docs and summarize it'",
-        "agent_run_btn": "🚀 Give Task to Auto-Pilot Agent", "agent_working": "Agent is working autonomously...", "agent_success": "Task Completed!",
-        "agent_tools": "Agent Tools", "agent_logs": "Agent Work Logs",
-        "agent_local_path": "Work with local computer files (Local Path)", "agent_path_hint": "Enter full path like C:\\Users\\... or D:\\...",
-        "multi_upload_hint": "You can select and upload multiple files at once.",
-        "new_msg": "New Message", "new_req": "New Request"
-    },
-    "hi": {
-        "chat_tab": "💬 Chat", "docs_tab": "📄 Documents", "image_tab": "🖼️ Image", "table_tab": "📊 Table + Chart",
-        "agent_tab": "🤖 Auto-Pilot Agent", "chat_welcome": "नमस्ते! क्या पूछना है?", "chat_hint": "नीचे chat box में प्रश्न लिखें",
-        "chat_input": "प्रश्न लिखें...", "queries": "queries", "no_tags": "कोई नहीं",
-        "logout": "🚪 Logout", "ui_language": "UI भाषा", "database_ready": "Database तैयार", "database_missing": "Database नहीं",
-        "actions": "Actions", "rebuild": "🔄 Rebuild", "chat_clear": "➕ New Chat", "export_chat": "💾 Export Chat",
-        "no_chat": "कोई chat नहीं", "voice_settings": "🎤 Voice Settings", "auto_speak": "🔊 Auto-speak",
-        "input_lang": "🎤 Input भाषा", "output_lang": "🔊 Output भाषा", "doc_tags": "🏷️ Document Tags",
-        "chat_tag_filter": "Tag Filter", "filter_remove": "✖ हटाएं", "filter_active": "Tag Filter Active",
-        "filter_hint": "इन tags वाले PDF में खोज", "no_tags_available": "कोई tags नहीं",
-        "admin_panel": "👑 Admin Panel", "users": "users", "deleted": "हटाया",
-        "my_docs": "मेरे Documents", "upload_doc": "नया Document Upload", "upload_hint": "PDF, DOCX, Image, TXT — कोई भी (एक बार में कई फाइलें)",
-        "upload_process": "📤 Upload + Process", "uploading": "Upload हो रहा...", "processing": "Process हो रहा...",
-        "files_saved": "files save हुए", "ai_ready": "AI तैयार!", "my_files": "मेरी Files", "no_files": "कोई document नहीं।",
-        "ask_docs": "💬 Documents के बारे में पूछें", "ask_hint": "प्रश्न लिखें या 🎤 दबाएं",
-        "ask_placeholder": "जैसे: यह किसका document है?", "ask_btn": "🔍 पूछें", "clear_btn": "🗑️ Clear",
-        "your_question": "आपका प्रश्न", "ai_answer": "AI जवाफ", "thinking": "सोच रहा हूँ...", "analyzing": "विश्लेषण...",
-        "image_analysis": "Image Analysis", "image_hint": "कोई भी image — AI समझता है (कई फाइलें मिल सकती हैं)", "upload_image": "Image डालें",
-        "analysis_type": "Analysis प्रकार", "analyze_btn": "🔍 Analyze", "delete_btn": "🗑️ हटाएं",
-        "result": "परिणाम", "upload_prompt": "👈 Image upload करें", "image_question": "💬 Image के बारे में पूछें",
-        "image_placeholder": "जैसे: कितना amount है?", "table_chart": "Table + Chart Analysis",
-        "table_hint": "PDF, Excel, CSV, Image से tables निकालें और Excel बनाएं (कई फाइलें मिल सकती हैं)", "pdf_select": "File चुनें", "tables_found": "tables मिले",
-        "no_table": "कोई table नहीं", "no_pdf": "docs/ में File नहीं", "no_docs_folder": "docs/ folder नहीं",
-        "data_tab": "📄 Data", "chart_tab": "📈 Chart", "stats_tab": "📊 Stats", "table_question": "💬 Table के बारे में पूछें",
-        "table_placeholder": "जैसे: सबसे बड़ा amount कितना?", "voice_label": "🎤 Voice", "ai_label": "🧠 AI जवाफ",
-        "made_with": "Made with ❤️ in Nepal", "feedback_thanks": "धन्यवाद!", "copy_btn": "Copy", "speak_btn": "सुनें",
-        "like_btn": "अच्छा", "dislike_btn": "बुरा", "footer_about": "AI-powered PDF assistant",
-        "footer_links": "Links", "voice_hint": "🎤 दबाएं → बोलें → Text auto-fill", "download_excel": "📥 Excel Download", "download_csv": "📥 CSV Download",
-        "ai_report_btn": "🤖 AI Business Report बनाएं", "ai_report_title": "🤖 AI Business Analysis Report",
-        "ai_report_desc": "AI आपके डेटा का विश्लेषण करके व्यावसायिक रिपोर्ट बनाता है।",
-        "upload_new_file": "📤 नई File अपलोड करें (PDF, Excel, CSV, Image)",
-        "select_from_docs": "📁 docs/ फोल्डर से चुनें", "where_extract": "Table कहाँ से निकालें?",
-        "upload_file_label": "File डालें", "extract_tables_btn": "📊 Tables निकालें",
-        "extracting": "Tables निकाल रहे हैं...", "table_found_msg": "tables मिले —",
-        "image_table_msg": "Image से Table निकाला गया (AI ने पढ़ा):",
-        "download_img_excel": "📥 Download Extracted Table as Excel (.xlsx)",
-        "ai_parse_error": "AI table को सही फॉर्मेट में नहीं दे पाया। नीचे दिए गए टेक्स्ट को कॉपी करें:",
-        "download_report": "📥 Download Report (.txt)", "sum": "Sum", "avg": "Average", "min": "Minimum", "max": "Maximum", "no_numeric": "कोई Numeric column नहीं",
-        "chat_history": "चैट्स", "doc_history": "PDFs", "img_history": "Images", "table_history": "Tables",
-        "no_history": "कोई इतिहास नहीं", "online": "ऑनलाइन", "messages": "संदेश", "copy_answer": "📋 Copy Answer",
-        "friends": "दोस्त", "add_friend": "दोस्त जोड़ें", "pending": "लंबित", "accept": "स्वीकार", "reject": "अस्वीकार", "message": "संदेश",
-        "messenger": "Messenger", "active_now": "अभी सक्रिय", "search": "खोजें...", "no_messages": "अभी तक कोई संदेश नहीं", "type_msg": "संदेश लिखें...",
-        "share_btn": "📤 Share / Send", "send_to_messenger": "Messenger से भेजें", "send_to_gmail": "Gmail से भेजें",
-        "enter_email": "ईमेल पता लिखें", "send_email_btn": "📧 Email भेजें", "attached_file": "📎 फाइल संलग्न",
-        "download_file": "⬇️ डाउनलोड करें", "file_upload_label": "📎 फाइल अपलोड करें",
-        "send_success": "सफलतापूर्वक भेजा गया!", "share_report": "रिपोर्ट शेयर करें",
-        "team_share": "टीम के साथ शेयर करें (Multi-Select)", "select_members": "सदस्यों को चुनें",
-        "data_edit_hint": "आप यहाँ डेटा सीधे एडिट कर सकते हैं।", "save_changes": "परिवर्तन सेव करें",
-        "back_to_chats": "🔙 चैट्स पर वापस जाएं", "send_file": "फाइल भेजें",
-        "img_gen_not_supported": "क्षमा करें, यह AI मॉडल छवि उत्पन्न या संपादित नहीं कर सकता। यह केवल छवियों को पढ़ और विश्लेषण कर सकता है।",
-        "forensic_btn": "🕵️‍♂️ Forensic Check (Fake Detector)", "forensic_hint": "क्या यह फाइल/टेबल नकली (Fake) है या असली (Original)? AI से पूछें।",
-        "forensic_analyzing": "फोरेंसिक विश्लेषण हो रहा है...", "forensic_result": "🕵️‍♂️ फोरेंसिक रिपोर्ट",
-        "agent_goal": "आपका लक्ष्य क्या है?", "agent_goal_placeholder": "जैसे: 'C:\\Users\\Dell\\Desktop\\company_brain\\docs में sample-table.pdf पढ़ें और सारांश दें'",
-        "agent_run_btn": "🚀 Auto-Pilot Agent को काम दें", "agent_working": "एजेंट खुद काम कर रहा है...", "agent_success": "काम पूरा हुआ!",
-        "agent_tools": "एजेंट के टूल्स", "agent_logs": "एजेंट के काम के लॉग",
-        "agent_local_path": "स्थानीय कंप्यूटर फ़ाइलों के साथ काम करें (Local Path)", "agent_path_hint": "C:\\Users\\... या D:\\... का पूरा पथ दर्ज करें",
-        "multi_upload_hint": "आप एक बार में कई फाइलें चुनकर अपलोड कर सकते हैं।",
-        "new_msg": "नया संदेश", "new_req": "नई रिक्वेस्ट"
-    }
-}
 
-def t(key, lang=None):
-    if lang is None: lang = st.session_state.get("ui_lang", "ne")
-    return UI_TEXT.get(lang, UI_TEXT["ne"]).get(key, key)
 
 # ============================================================
 # Global CSS (Powerful Messenger Animation — FIXED)
@@ -2164,15 +1988,18 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # ✅ नयाँ: User Dashboard
+        # ✅ नयाँ: User Dashboard (Multilingual)
     from user_stats import get_user_dashboard_stats
     st.markdown("---")
-    st.markdown("### 📊 तपाईंको प्रगति")
+    st.markdown(f"### 📊 {t('progress')}")
     u_stats = get_user_dashboard_stats(st.session_state.user)
-    st.metric("📄 PDF हरू", u_stats["pdfs"])
-    st.metric("💬 च्याटहरू", u_stats["chats"])
-    st.metric("📊 टेबलहरू", u_stats["tables"])
-    st.metric("🤖 एजेन्ट रन", u_stats["agent_runs"])
+    
+    # २ वटा कोलममा मिलाएर राखिएको (Design राम्रो देखिन)
+    col_s1, col_s2 = st.columns(2)
+    col_s1.metric(f"📄 {t('files')}", u_stats["pdfs"])
+    col_s2.metric(f"💬 {t('history')}", u_stats["chats"])
+    col_s1.metric(f"📊 {t('chunks')}", u_stats["tables"])    # tables को लागि chunks शब्द प्रयोग गरिएको
+    col_s2.metric(f"🤖 {t('agent')}", u_stats["agent_runs"])
     
         # ✅ Notification Bell (Sidebar)
     from notifications import get_unread_notifications, mark_as_read
@@ -2377,17 +2204,25 @@ with st.sidebar:
     st.markdown('<div class="ds-section">⚙️ Settings</div>', unsafe_allow_html=True)
 
     with st.expander("⚙️ Settings", expanded=False):
-        # 🌐 Language
-        st.markdown("##### 🌐 Language")
-        ui_lang_map = {"🇳🇵 नेपाली": "ne", "🇬🇧 English": "en", "🇮🇳 हिन्दी": "hi"}
+                # 🌐 Language (२१ भाषा सपोर्ट)
+        st.markdown(f"##### 🌐 {t('ui_language', lang)}")
+        
+        # translations.py बाट २१ भाषाको डिक्शनरी ल्याउने
+        from translations import LANGUAGES
+        ui_lang_map = LANGUAGES # {"en": "🇬🇧 English", ...}
+        
         ui_keys = list(ui_lang_map.keys())
-        ui_values = list(ui_lang_map.values())
-        current_index = ui_values.index(lang) if lang in ui_values else 0
+        current_index = ui_keys.index(lang) if lang in ui_keys else 0
+        
         selected_ui = st.selectbox(
-            "UI Language", ui_keys, index=current_index,
-            key="ui_lang_select", label_visibility="collapsed"
+            t('ui_language', lang), 
+            ui_keys, 
+            index=current_index,
+            format_func=lambda x: ui_lang_map[x], # Flag + नाम देखाउने
+            key="ui_lang_select", 
+            label_visibility="collapsed"
         )
-        new_lang = ui_lang_map[selected_ui]
+        new_lang = selected_ui
         if new_lang != lang:
             st.session_state.ui_lang = new_lang
             st.rerun()
@@ -2492,13 +2327,13 @@ is_admin = st.session_state.get("user_role", "user") == "admin"
 
 if is_admin:
     tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_tools, tab_admin = st.tabs([
-        t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "🛠️ Tools & Cost", "👑 Admin Dashboard"
+        t("docs_tab"), t("image_tab"), t("table_tab"), t("agent_tab"), 
+        t("video_tab"), t("caption_tab"), t("crm_tab"), t("tools_tab"), t("admin_tab")
     ])
 else:
     tab1, tab2, tab3, tab4, tab_video, tab_caption, tab_crm, tab_tools = st.tabs([
-        t("docs_tab", lang), t("image_tab", lang), t("table_tab", lang),
-        t("agent_tab", lang), "🎬 HD Converter", "💬 Auto Caption", "💼 Client Manager", "🛠️ Tools & Cost"
+        t("docs_tab"), t("image_tab"), t("table_tab"), t("agent_tab"), 
+        t("video_tab"), t("caption_tab"), t("crm_tab"), t("tools_tab")
     ])
     tab_admin = None
     
