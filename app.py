@@ -2035,8 +2035,8 @@ with st.sidebar:
     # 🔍 3. SEARCH BAR (Ctrl+K)
     # ============================================================
     search_query = st.text_input(
-        "🔍 Search...",
-        placeholder="Search... (Ctrl+K)",
+        f"🔍 {t('search')}",
+        placeholder=f"{t('search')}... (Ctrl+K)",
         key="ds_search",
         label_visibility="collapsed"
     )
@@ -2049,7 +2049,7 @@ with st.sidebar:
     st.markdown(f"""
     <div class="memory-header">
         <span>🧠</span>
-        <span>Memory</span>
+        <span>{t('memory_title')}</span>
         <span class="count">{mem_count}</span>
     </div>
     """, unsafe_allow_html=True)
@@ -2057,8 +2057,7 @@ with st.sidebar:
     if not memories:
         st.markdown("""
         <div class="memory-empty">
-            कुनै memory छैन<br>
-            <span style="font-size:0.85em;">कुराकानी गर्दा स्वतः बन्छ</span>
+            {t('no_memory')}
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -2099,7 +2098,7 @@ with st.sidebar:
     # 📚 5. HISTORY (Tabs)
     # ============================================================
     user_history = load_history(st.session_state.user)
-    st.markdown('<div class="ds-section">📚 History</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ds-section">📚 {t("history")}</div>', unsafe_allow_html=True)
 
     hist_tab1, hist_tab2, hist_tab3, hist_tab4 = st.tabs(["💬", "📄", "🖼️", "📊"])
 
@@ -2201,7 +2200,7 @@ with st.sidebar:
     # ============================================================
     # ⚙️ 6. SETTINGS (एउटै expander भित्र)
     # ============================================================
-    st.markdown('<div class="ds-section">⚙️ Settings</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ds-section">⚙️ {t("settings")}</div>', unsafe_allow_html=True)
 
     with st.expander("⚙️ Settings", expanded=False):
                 # 🌐 Language (२१ भाषा सपोर्ट)
@@ -2341,58 +2340,77 @@ else:
 # TAB 1: DOCUMENTS
 # ============================================================
 with tab1:
-    st.markdown(f"### {t('my_docs', lang)}")
+    st.markdown(f"### {t('my_docs')}")
     try:
         from user_manager import list_user_pdfs, save_user_pdf, delete_user_pdf, get_user_stats
         user_stats = get_user_stats(st.session_state.user)
+        
+        # ✅ Metrics (Files, Chunks, Size) - t() प्रयोग गरियो
         col1, col2, col3 = st.columns(3)
-        col1.metric("📄 Files", user_stats['pdf_count']); col2.metric("✂️ Chunks", user_stats['chunks']); col3.metric("💾 Size", f"{user_stats['total_size']/1024:.1f} KB")
+        col1.metric(f"📄 {t('files')}", user_stats['pdf_count'])
+        col2.metric(f"✂️ {t('chunks')}", user_stats['chunks'])
+        col3.metric(f"💾 {t('size')}", f"{user_stats['total_size']/1024:.1f} KB")
         
         st.markdown("---")
-        st.markdown(f"#### {t('upload_doc', lang)}")
-        st.caption(t("upload_hint", lang) + " " + t("multi_upload_hint", lang))
+        st.markdown(f"#### {t('upload_doc')}")
+        st.caption(f"{t('upload_hint')} {t('multi_upload_hint')}")
         
-        uploaded_files = st.file_uploader(t("upload_doc", lang), type=["pdf", "docx", "doc", "txt", "md", "jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key="user_doc_upload", label_visibility="collapsed")
+        uploaded_files = st.file_uploader(
+            t("upload_doc"), 
+            type=["pdf", "docx", "doc", "txt", "md", "jpg", "jpeg", "png", "webp"], 
+            accept_multiple_files=True, 
+            key="user_doc_upload", 
+            label_visibility="collapsed"
+        )
         
         if uploaded_files:
-            if st.button(t("upload_process", lang), use_container_width=True, type="primary", key="docs_upload_process"):
+            if st.button(t("upload_process"), use_container_width=True, type="primary", key="docs_upload_process"):
                 uploaded_count = 0
-                with st.spinner(t("uploading", lang)):
+                with st.spinner(t("uploading")):
                     for file in uploaded_files:
                         try:
-                            save_user_pdf(st.session_state.user, file.getbuffer(), file.name); uploaded_count += 1
-                            log_action(st.session_state.user, "UPLOAD_DOC", file.name, "success")   # ✅ नयाँ
-                        except Exception as e: st.error(f"❌ {file.name}: {e}")
+                            save_user_pdf(st.session_state.user, file.getbuffer(), file.name)
+                            uploaded_count += 1
+                        except Exception as e: 
+                            st.error(f"❌ {file.name}: {e}")
                 if uploaded_count > 0:
-                    st.success(f"✅ {uploaded_count} {t('files_saved', lang)}")
-                    with st.spinner(t("processing", lang)):
+                    st.success(f"✅ {uploaded_count} {t('files_saved')}")
+                    with st.spinner(t("processing")):
                         try:
                             from user_vector_store import build_user_database
-                            build_user_database(st.session_state.user, reset=True); st.success(f"✅ {t('ai_ready', lang)}")
-                        except Exception as e: st.error(f"❌ {e}")
-                    time.sleep(1); st.rerun()
+                            build_user_database(st.session_state.user, reset=True)
+                            st.success(f"✅ {t('ai_ready')}")
+                        except Exception as e: 
+                            st.error(f"❌ {e}")
+                    time.sleep(1)
+                    st.rerun()
         
         st.markdown("---")
         user_files = list_user_pdfs(st.session_state.user)
         if user_files:
-            st.markdown(f"#### {t('my_files', lang)} ({len(user_files)})")
+            st.markdown(f"#### {t('my_files')} ({len(user_files)})")
             for doc in user_files:
                 col1, col2, col3 = st.columns([4, 2, 1])
-                with col1: st.markdown(f"{doc.get('icon', '📄')} **{doc['name']}**")
-                with col2: st.caption(f"{doc.get('format', 'FILE')} • {doc['size']/1024:.1f} KB")
+                with col1: 
+                    st.markdown(f"{doc.get('icon', '📄')} **{doc['name']}**")
+                with col2: 
+                    st.caption(f"{doc.get('format', 'FILE')} • {doc['size']/1024:.1f} KB")
                 with col3:
                     if st.button("🗑️", key=f"del_file_{doc['name']}"):
                         if delete_user_pdf(st.session_state.user, doc["name"]):
                             try:
                                 from user_vector_store import build_user_database
                                 build_user_database(st.session_state.user, reset=True)
-                            except Exception: pass
-                            st.success(t("deleted", lang)); st.rerun()
+                            except Exception: 
+                                pass
+                            st.success(t("deleted"))
+                            st.rerun()
             
             st.markdown("---")
-            st.markdown(f"#### {t('ask_docs', lang)}")
-            st.caption(t("ask_hint", lang))
+            st.markdown(f"#### {t('ask_docs')}")
+            st.caption(t("ask_hint"))
             
+            # Voice Input र Text Input को लागि
             input_key_docs = f"mini_doc_input_{st.session_state.get('mini_doc_input_version', 0)}"
             col_voice_docs, col_input_docs = st.columns([1, 8])
             
@@ -2405,33 +2423,45 @@ with tab1:
                         with st.spinner("🎤 सुन्दै..."):
                             os.makedirs("temp_audio", exist_ok=True)
                             audio_path = os.path.join("temp_audio", "docs_voice.wav")
-                            with open(audio_path, "wb") as f: f.write(docs_audio.getbuffer())
+                            with open(audio_path, "wb") as f: 
+                                f.write(docs_audio.getbuffer())
                             text = transcribe_audio(audio_path, st.session_state.voice_lang)
                             if text and not text.startswith("Error") and len(text.strip()) > 2:
-                                st.session_state.mini_doc_q = text; st.rerun()
+                                st.session_state.mini_doc_q = text
+                                st.rerun()
             
             with col_input_docs:
-                mini_doc_q = st.text_input(t("your_question", lang), value="", placeholder=t("ask_placeholder", lang), key=input_key_docs, label_visibility="collapsed")
+                mini_doc_q = st.text_input(
+                    t("your_question"), 
+                    value="", 
+                    placeholder=t("ask_placeholder"), 
+                    key=input_key_docs, 
+                    label_visibility="collapsed"
+                )
             
             col_btn1, col_btn2 = st.columns([3, 1])
             with col_btn1:
-                ask_clicked = st.button(t("ask_btn", lang), key="docs_ask_btn", use_container_width=True, type="primary")
+                ask_clicked = st.button(t("ask_btn"), key="docs_ask_btn", use_container_width=True, type="primary")
             with col_btn2:
-                if st.button(t("clear_btn", lang), key="docs_clear_btn", use_container_width=True):
-                    st.session_state.mini_doc_q = ""; st.session_state.mini_doc_a = ""
-                    st.session_state.mini_doc_input_version += 1; st.rerun()
+                if st.button(t("clear_btn"), key="docs_clear_btn", use_container_width=True):
+                    st.session_state.mini_doc_q = ""
+                    st.session_state.mini_doc_a = ""
+                    st.session_state.mini_doc_input_version += 1
+                    st.rerun()
             
             if (ask_clicked or mini_doc_q) and mini_doc_q.strip():
                 st.session_state.mini_doc_q_asked = mini_doc_q
-                st.markdown(f'<div class="chat-q-box">👤 <b>{t("your_question", lang)}:</b><br>{mini_doc_q}</div>', unsafe_allow_html=True)
-                st.markdown(f"🧠 **{t('ai_answer', lang)}:**")
+                st.markdown(f'<div class="chat-q-box">👤 <b>{t("your_question")}:</b><br>{mini_doc_q}</div>', unsafe_allow_html=True)
+                st.markdown(f"🧠 **{t('ai_answer')}:**")
                 
+                # ✅ Memory Context थपिएको
                 memory_ctx = get_memory_context(st.session_state.user)
                 doc_q_with_mem = f"{mini_doc_q}\n\n[User Memory: {memory_ctx}]" if memory_ctx else mini_doc_q
-                    
-                answer_placeholder = st.empty(); full_answer = ""
+                
+                answer_placeholder = st.empty()
+                full_answer = ""
                 try:
-                    for chunk in stream_pdf_answer(mini_doc_q, st.session_state.user, target_lang=lang):
+                    for chunk in stream_pdf_answer(doc_q_with_mem, st.session_state.user, target_lang=lang):
                         full_answer += chunk
                         answer_placeholder.markdown(f'<div class="chat-a-box">{full_answer}<span class="loading-dot">▌</span></div>', unsafe_allow_html=True)
                     answer_placeholder.markdown(f'<div class="chat-a-box">{full_answer}</div>', unsafe_allow_html=True)
@@ -2441,39 +2471,46 @@ with tab1:
                     
                     st.session_state.mini_doc_input_version += 1
                     st.rerun()
-                except Exception as e: st.error(f"❌ {e}")
+                except Exception as e: 
+                    st.error(f"❌ {e}")
             
             elif st.session_state.get("mini_doc_a"):
-                st.markdown(f'<div class="chat-q-box">👤 <b>{t("your_question", lang)}:</b><br>{st.session_state.get("mini_doc_q_asked", "")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-q-box">👤 <b>{t("your_question")}:</b><br>{st.session_state.get("mini_doc_q_asked", "")}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="chat-a-box">🧠 {st.session_state.mini_doc_a}</div>', unsafe_allow_html=True)
-                if st.button(t("copy_answer", lang), key="copy_doc_ans"): st.code(st.session_state.mini_doc_a, language=None)
+                if st.button(t("copy_answer"), key="copy_doc_ans"): 
+                    st.code(st.session_state.mini_doc_a, language=None)
                 
-                with st.expander(f"📤 {t('share_btn', lang)}"):
+                with st.expander(f"📤 {t('share_btn')}"):
                     user_data = get_user_data(st.session_state.user)
                     friends_list = user_data.get("friends", [])
                     if friends_list:
-                        selected_friends = st.multiselect(t("team_share", lang), friends_list, key="doc_multi_share")
-                        if st.button(t("send_to_messenger", lang), key="doc_send_btn"):
+                        selected_friends = st.multiselect(t("team_share"), friends_list, key="doc_multi_share")
+                        if st.button(t("send_to_messenger"), key="doc_send_btn"):
                             if selected_friends:
-                                for f in selected_friends: send_dm_db(st.session_state.user, f, text=st.session_state.mini_doc_a)
-                                st.success(t("send_success", lang))
-                            else: st.warning("Select at least one friend.")
-                    else: st.warning("No friends to share with.")
-        else: st.info(t("no_files", lang))
-    except ImportError: st.error("⚠️ user_manager.py भेटिएन")
+                                for f in selected_friends: 
+                                    send_dm_db(st.session_state.user, f, text=st.session_state.mini_doc_a)
+                                st.success(t("send_success"))
+                            else: 
+                                st.warning("Select at least one friend.")
+                    else: 
+                        st.warning("No friends to share with.")
+        else: 
+            st.info(t("no_files"))
+    except ImportError: 
+        st.error("⚠️ user_manager.py भेटिएन")
 
 # ============================================================
 # TAB 2: IMAGE
 # ============================================================
 with tab2:
     st.markdown(f"### {t('image_analysis', lang)}")
-    st.caption(t("image_hint", lang) + " " + t("multi_upload_hint", lang))
+    st.caption(f"{t('image_hint', lang)} {t('multi_upload_hint', lang)}")
     col1, col2 = st.columns([1, 1])
     with col1:
         uploaded_images = st.file_uploader(t("upload_image", lang), type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True, key="img_upload_tab", label_visibility="collapsed")
         
         if uploaded_images:
-            st.write(f"**{len(uploaded_images)} image(s) selected.**")
+            st.write(f"**{len(uploaded_images)} {t('images_selected', lang)}**")
             cols = st.columns(4)
             for i, img in enumerate(uploaded_images):
                 with cols[i % 4]: st.image(img, width=100)
@@ -2529,8 +2566,8 @@ with tab2:
                         if selected_friends:
                             for f in selected_friends: send_dm_db(st.session_state.user, f, text=st.session_state.img_result)
                             st.success(t("send_success", lang))
-                        else: st.warning("Select at least one friend.")
-                else: st.warning("No friends to share with.")
+                        else: st.warning(t("select_one_friend", lang))
+                else: st.warning(t("no_friends_to_share", lang))
         else: 
             st.markdown(f'<div class="empty-state"><div class="icon">🖼️</div><p>{t("upload_prompt", lang)}</p></div>', unsafe_allow_html=True)
 
@@ -2539,7 +2576,7 @@ with tab2:
 # ============================================================
 with tab3:
     st.markdown(f"### {t('table_chart', lang)}")
-    st.caption(t("table_hint", lang) + " " + t("multi_upload_hint", lang))
+    st.caption(f"{t('table_hint', lang)} {t('multi_upload_hint', lang)}")
     
     source_option = st.radio(t("where_extract", lang), [t("upload_new_file", lang), t("select_from_docs", lang)], horizontal=True, label_visibility="collapsed")
     
@@ -2550,7 +2587,7 @@ with tab3:
         uploaded_table_files = st.file_uploader(t("upload_file_label", lang), type=["pdf", "xlsx", "xls", "csv", "jpg", "jpeg", "png"], accept_multiple_files=True, key="table_file_uploader")
         
         if uploaded_table_files:
-            st.write(f"**{len(uploaded_table_files)} file(s) selected.**")
+            st.write(f"**{len(uploaded_table_files)} {t('files_selected', lang)}**")
             if st.button(t("extract_tables_btn", lang), use_container_width=True, type="primary", key="extract_from_upload"):
                 os.makedirs("temp_tables", exist_ok=True)
                 all_tables = []
@@ -2641,7 +2678,7 @@ with tab3:
         
         for idx, tbl in enumerate(tables, 1):
             df = tbl["dataframe"].copy()
-            with st.expander(f"📋 Table {idx} — {tbl['index']} ({tbl['rows']}×{tbl['cols']})", expanded=(idx == 1)):
+            with st.expander(f"📋 {t('table', lang)} {idx} — {tbl['index']} ({tbl['rows']}×{tbl['cols']})", expanded=(idx == 1)):
                 sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([t("data_tab", lang), t("chart_tab", lang), t("stats_tab", lang), "🤖 AI Report"])
                 
                 with sub_tab1:
@@ -2673,8 +2710,8 @@ with tab3:
                                     if selected_friends:
                                         for f in selected_friends: send_dm_db(st.session_state.user, f, text=f"🕵️‍♂️ Forensic Report:\n{st.session_state.forensic_result}")
                                         st.success(t("send_success", lang))
-                                    else: st.warning("Select at least one friend.")
-                            else: st.warning("No friends to share with.")
+                                    else: st.warning(t("select_one_friend", lang))
+                            else: st.warning(t("no_friends_to_share", lang))
                 
                 with sub_tab2:
                     numeric_cols = edited_df.select_dtypes(include=["number"]).columns.tolist()
@@ -2691,7 +2728,7 @@ with tab3:
                             x_index = edited_df.columns.tolist().index(x_default) if x_default in edited_df.columns.tolist() else 0
                             x_col = st.selectbox("X", edited_df.columns.tolist(), index=x_index, key=f"tab_x_{idx}")
                         with c2: y_col = st.selectbox("Y", numeric_cols, key=f"tab_y_{idx}")
-                        with c3: chart_type = st.selectbox("Type", ["bar", "line", "pie", "area", "scatter"], key=f"tab_t_{idx}")
+                        with c3: chart_type = st.selectbox(t("type", lang), ["bar", "line", "pie", "area", "scatter"], key=f"tab_t_{idx}")
                         
                         fig = make_chart(edited_df, chart_type=chart_type, x_col=x_col, y_col=y_col)
                         if fig: st.plotly_chart(fig, use_container_width=True)
@@ -2725,8 +2762,8 @@ with tab3:
                                     if selected_friends:
                                         for f in selected_friends: send_dm_db(st.session_state.user, f, text=st.session_state.ai_report_result)
                                         st.success(t("send_success", lang))
-                                    else: st.warning("Select at least one friend.")
-                            else: st.warning("No friends to share with.")
+                                    else: st.warning(t("select_one_friend", lang))
+                            else: st.warning(t("no_friends_to_share", lang))
         
         st.markdown("---")
         st.markdown(f"#### {t('table_question', lang)}")
@@ -2782,13 +2819,12 @@ with tab3:
             st.markdown(f'<div class="chat-a-box">🧠 {st.session_state.mini_table_a}</div>', unsafe_allow_html=True)
             if st.button(t("copy_answer", lang), key="copy_table_ans"): st.code(st.session_state.mini_table_a, language=None)
 
-            
 # ============================================================
 # TAB 4: AUTO-PILOT AGENT (Powerful v2)
 # ============================================================
 with tab4:
     st.markdown(f"### {t('agent_tab', lang)}")
-    st.caption("AI ले आफैंले काम गर्ने पावरफुल एजेन्ट। तपाईंले लक्ष्य दिनुहोस्, बाँकी AI ले गर्छ। (Local Files + Python + Write + Summarize)")
+    st.caption(t("agent_hint", lang))
 
     # ---- Agent Config ----
     col1, col2 = st.columns([2, 1])
@@ -2802,21 +2838,21 @@ with tab4:
             key="agent_goal_v2"
         )
     with col2:
-        st.markdown("#### ⚙️ Agent Settings")
-        max_steps = st.slider("Max Steps", 5, 30, 15, key="agent_max_steps")
-        show_logs = st.toggle("Show Work Logs", value=True, key="agent_show_logs")
-        st.caption(f"🛠️ Tools: {len(AGENT_TOOLS_V2)} available")
+        st.markdown(f"#### ⚙️ {t('agent_settings', lang)}")
+        max_steps = st.slider(t("max_steps", lang), 5, 30, 15, key="agent_max_steps")
+        show_logs = st.toggle(t("show_logs", lang), value=True, key="agent_show_logs")
+        st.caption(f"🛠️ {t('tools_available', lang)}: {len(AGENT_TOOLS_V2)}")
 
     # ---- Allowed Folders Info ----
-    with st.expander("🔒 Allowed Folders (Agent can only access these)"):
+    with st.expander(t("allowed_folders", lang)):
         for root in AGENT_ALLOWED_ROOTS:
             st.code(root, language=None)
-        st.caption("Agent cannot read/write outside these folders. Edit AGENT_ALLOWED_ROOTS in code to change.")
+        st.caption(t("allowed_folders_hint", lang))
 
     # ---- Run Agent ----
     if st.button(t("agent_run_btn", lang), type="primary", use_container_width=True, key="agent_run_v2"):
         if not goal.strip():
-            st.warning("Please enter a goal.")
+            st.warning(t("enter_goal", lang))
         else:
             logs = []
             final_answer = ""
@@ -2828,30 +2864,27 @@ with tab4:
             try:
                 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
                 chat = client.chats.create(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-2.5-flash-lite",
                     config=types.GenerateContentConfig(
                         tools=AGENT_TOOLS_V2,
                         temperature=0.1,
                     )
                 )
 
-                # ✅ सुरुवाती सन्देश (Universal Multilingual Support)
                 system_hint = (
                     f"You are a powerful autonomous agent. Your goal: {goal}\n\n"
                     f"🌍 LANGUAGE RULE:\n"
                     f"You MUST reply in the EXACT SAME LANGUAGE as the user's goal/request. "
-                    f"(e.g., if the goal is in Spanish, reply in Spanish; if in Japanese, reply in Japanese; if in Nepali, reply in Nepali). "
                     f"Never translate the user's language to English unless requested.\n\n"
                     f"Rules:\n"
                     f"1. Break the goal into steps. Use tools to gather info, write files, run Python.\n"
                     f"2. Only access folders listed in AGENT_ALLOWED_ROOTS.\n"
                     f"3. If the goal asks for current data (price, news, weather, etc.), use **tool_web_search**.\n"
-                    f"4. When showing web search results, **QUOTE THE EXACT NUMBERS** from the search result. Do not guess or approximate.\n"
+                    f"4. When showing web search results, **QUOTE THE EXACT NUMBERS** from the search result.\n"
                     f"5. If the goal asks to send an email, use **tool_send_email**.\n"
                     f"6. When done, give a clear final answer summarizing what you did.\n"
                     f"7. If a tool fails, try a different approach.\n"
                     f"8. Be concise but thorough.\n"
-                    f"9. CRITICAL FOR WEB SEARCH: If the user asks for live data (price, news), first use **tool_web_search**. Then, use **tool_read_webpage** on the top 1 or 2 links to read the exact details before answering.\n"
                 )
                 response = chat.send_message(system_hint)
 
@@ -2860,12 +2893,11 @@ with tab4:
                     steps_taken += 1
 
                     if response.function_calls:
-                        # Parallel tool calls support
                         function_responses = []
                         for tool_call in response.function_calls:
                             tool_name = tool_call.name
                             tool_args = dict(tool_call.args) if tool_call.args else {}
-                            call_id = tool_call.id  # ✅ Tool response ID
+                            call_id = tool_call.id
 
                             logs.append(f"🔧 Step {steps_taken}: `{tool_name}` args={str(tool_args)[:200]}")
 
@@ -2901,25 +2933,21 @@ with tab4:
                                 
                             logs.append(f"   ↳ Result: {str(result)[:300]}")
 
-                            # Function response with ID (context circulation)
                             function_responses.append(
                                 types.Part.from_function_response(
                                     name=tool_name,
                                     response={"result": str(result)},
-                                    #id=call_id  # ✅ ID सहित
                                 )
                             )
 
-                        # Send all tool results back
                         response = chat.send_message(function_responses)
                     else:
-                        # No more tool calls — final answer
                         final_answer = response.text or "(no answer)"
                         logs.append(f"✅ Step {steps_taken}: Final answer generated.")
                         break
 
                 if not final_answer:
-                    final_answer = "⚠️ Agent reached max steps without final answer. Last state: " + str(response.text)[:500]
+                    final_answer = t("agent_max_steps_error", lang) + str(response.text)[:500]
 
                 status_placeholder.success(t("agent_success", lang))
 
@@ -2948,24 +2976,21 @@ with tab4:
     # 💬 MINI CHAT — Agent सँग सोधपुछ (Tool-Enabled, Powerful)
     # ============================================================
     st.markdown("---")
-    st.markdown("#### 💬 Agent सँग सोधपुछ गर्नुहोस्")
-    st.caption("अघिल्लो नतिजामा आधारित प्रश्न सोध्नुहोस्, वा थप काम दिनुहोस्। (Tools enabled)")
+    st.markdown(f"#### 💬 {t('agent_mini_chat_title', lang)}")
+    st.caption(t("agent_mini_chat_hint", lang))
 
-    # ---- Context (अघिल्लो नतिजा) ----
     agent_context = st.session_state.get("agent_result", "")
     if agent_context:
-        with st.expander("📋 अघिल्लो नतिजा (Context)"):
+        with st.expander(f"📋 {t('previous_context', lang)}"):
             st.markdown(agent_context[:1500])
 
-    # ---- History init ----
     if "agent_mini_chat" not in st.session_state:
         st.session_state.agent_mini_chat = []
 
-    # ---- पुरानो कुराकानी देखाउने ----
     for msg in st.session_state.agent_mini_chat:
         if msg["role"] == "user":
             st.markdown(
-                f'<div class="chat-q-box">👤 <b>तपाईं:</b><br>{msg["content"]}</div>',
+                f'<div class="chat-q-box">👤 <b>{t("you", lang)}:</b><br>{msg["content"]}</div>',
                 unsafe_allow_html=True
             )
         else:
@@ -2974,22 +2999,19 @@ with tab4:
                 unsafe_allow_html=True
             )
 
-    # ---- Chat Input ----
-    mini_q = st.chat_input("Agent लाई प्रश्न सोध्नुहोस्...", key="agent_mini_chat_input")
+    mini_q = st.chat_input(t("agent_placeholder", lang), key="agent_mini_chat_input")
 
     if mini_q:
-        # User message save
         st.session_state.agent_mini_chat.append({"role": "user", "content": mini_q})
         
-        # Auto-extract memories from user message
         if len(mini_q.strip()) > 10:
             extract_memories_from_text(st.session_state.user, mini_q, "")
 
-        with st.spinner("🤖 Agent ले काम गर्दैछ..."):
+        with st.spinner(t("agent_working", lang)):
             try:
                 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
                 chat = client.chats.create(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-2.5-flash-lite",
                     config=types.GenerateContentConfig(
                         tools=AGENT_TOOLS_V2,
                         temperature=0.1,
@@ -2999,15 +3021,10 @@ with tab4:
                 memory_ctx = get_memory_context(st.session_state.user)
                 last_summary = get_latest_summary(st.session_state.user)
 
-                # ✅ Mini Chat को System Hint (Universal Multilingual Support)
-                memory_ctx = get_memory_context(st.session_state.user)
-                last_summary = get_latest_summary(st.session_state.user)
-
                 system_hint = (
                     f"You are a powerful autonomous agent with tools.\n\n"
                     f"🌍 LANGUAGE RULE:\n"
                     f"You MUST reply in the EXACT SAME LANGUAGE as the user's question. "
-                    f"(e.g., if the user asks in French, reply in French; if in Arabic, reply in Arabic; if in Nepali, reply in Nepali). "
                     f"Never translate the user's language to English unless requested.\n\n"
                     f"🧠 LONG-TERM MEMORY:\n{memory_ctx if memory_ctx else '(no memories yet)'}\n\n"
                     f"📝 LAST CONVERSATION SUMMARY:\n{last_summary if last_summary else '(none)'}\n\n"
@@ -3022,7 +3039,6 @@ with tab4:
                 
                 response = chat.send_message(system_hint)
 
-                # ---- Multi-step tool loop ----
                 max_mini_steps = 8
                 step = 0
                 final_answer = ""
@@ -3040,10 +3056,8 @@ with tab4:
 
                             mini_logs.append(f"🔧 Step {step}: `{tool_name}` args={str(tool_args)[:150]}")
 
-                                                        # ✅ Audit: agent tool call
                             log_action(st.session_state.user, "AGENT_TOOL", tool_name, "started", str(tool_args)[:200])
                             
-                            # ---- Tool Dispatch ----
                             try:
                                 if tool_name == "tool_search_files":
                                     result = tool_search_files(**tool_args)
@@ -3061,8 +3075,6 @@ with tab4:
                                     result = tool_summarize_pdf(**tool_args)
                                 elif tool_name == "tool_send_email":
                                     result = tool_send_email(**tool_args)
-                                #elif tool_name == "tool_send_whatsapp":
-                                    #result = tool_send_whatsapp(**tool_args)
                                 elif tool_name == "tool_google_sheets_write":
                                     result = tool_google_sheets_write(**tool_args)
                                 elif tool_name == "tool_google_drive_upload":
@@ -3082,7 +3094,6 @@ with tab4:
                                 types.Part.from_function_response(
                                     name=tool_name,
                                     response={"result": str(result)},
-                                    #id=call_id
                                 )
                             )
 
@@ -3092,34 +3103,29 @@ with tab4:
                         break
 
                 if not final_answer:
-                    final_answer = "⚠️ Max steps reached. " + str(response.text)[:300]
+                    final_answer = t("agent_max_steps_error", lang) + str(response.text)[:300]
 
                 answer = final_answer
 
-                # Logs देखाउने (expandable)
                 if mini_logs:
-                    with st.expander(f"📋 Tool Logs ({len(mini_logs)})"):
+                    with st.expander(f"📋 {t('tool_logs', lang)} ({len(mini_logs)})"):
                         for log in mini_logs:
                             st.text(log)
 
             except Exception as e:
                 answer = f"❌ Error: {e}"
 
-        # Agent answer save
         st.session_state.agent_mini_chat.append({"role": "assistant", "content": answer})
         
-                # Save memory from AI answer
         extract_memories_from_text(st.session_state.user, mini_q, answer)
 
-        # Auto-summarize every 10 messages
         if len(st.session_state.agent_mini_chat) % 10 == 0:
             summarize_conversation(st.session_state.user, st.session_state.agent_mini_chat)
             
         st.rerun()
 
-    # ---- Clear Chat ----
     if st.session_state.agent_mini_chat:
-        if st.button("🗑️ Chat Clear", key="agent_mini_chat_clear"):
+        if st.button(t("clear_chat", lang), key="agent_mini_chat_clear"):
             st.session_state.agent_mini_chat = []
             st.rerun()
 
@@ -3127,10 +3133,10 @@ with tab4:
 # 🎬 TAB 5: CAPCUT-STYLE VIDEO EDITOR
 # ============================================================
 with tab_video:
-    st.markdown("## 🎬 Powerful Video Editor")
-    st.caption("Trim, Text, Music, Filter, Effect — MoviePy powered")
+    st.markdown(f"## 🎬 {t('video_editor_title', lang)}")
+    st.caption(t("video_editor_hint", lang))
 
-    uploaded_video = st.file_uploader("भिडियो अपलोड गर्नुहोस्", type=["mp4", "mov", "avi", "mkv"], key="editor_upload")
+    uploaded_video = st.file_uploader(t("upload_video", lang), type=["mp4", "mov", "avi", "mkv"], key="editor_upload")
 
     if uploaded_video:
         os.makedirs("temp_edits", exist_ok=True)
@@ -3138,134 +3144,123 @@ with tab_video:
         with open(input_path, "wb") as f:
             f.write(uploaded_video.getbuffer())
 
-        # Video Preview
         st.video(input_path)
 
-        # Tabs for Editor Tools (CapCut जस्तै)
         edit_tab1, edit_tab2, edit_tab3, edit_tab4, edit_tab5 = st.tabs([
-            "✂️ Trim", "🎵 Music", "🔤 Text", "🎨 Filter", "⚡ Effect"
+            t("trim", lang), t("music", lang), t("text", lang), t("filter", lang), t("effect", lang)
         ])
 
         output_path = os.path.join("temp_edits", f"edited_{uploaded_video.name}")
 
         # ---- 1. TRIM ----
         with edit_tab1:
-            st.markdown("### ✂️ Trim (काट्ने)")
+            st.markdown(f"### {t('trim', lang)}")
             col1, col2 = st.columns(2)
             with col1:
-                start_t = st.number_input("Start Time (sec)", 0.0, 600.0, 0.0, key="t_start")
+                start_t = st.number_input(t("start_time", lang), 0.0, 600.0, 0.0, key="t_start")
             with col2:
-                end_t = st.number_input("End Time (sec)", 0.0, 600.0, 10.0, key="t_end")
+                end_t = st.number_input(t("end_time", lang), 0.0, 600.0, 10.0, key="t_end")
 
-            if st.button("✂️ Trim Video", type="primary", use_container_width=True):
-                with st.spinner("काट्दै..."):
+            if st.button(t("trim_btn", lang), type="primary", use_container_width=True):
+                with st.spinner(t("trimming", lang)):
                     res = trim_video(input_path, output_path, start_t, end_t)
                 if res["success"]:
-                    st.success("✅ Trimmed successfully!")
+                    st.success(t("trim_success", lang))
                     st.video(output_path)
                     with open(output_path, "rb") as f:
-                        st.download_button("⬇️ Download Trimmed Video", data=f.read(), file_name="trimmed.mp4", mime="video/mp4")
+                        st.download_button(t("download_trimmed", lang), data=f.read(), file_name="trimmed.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
         # ---- 2. MUSIC ----
         with edit_tab2:
-            st.markdown("### 🎵 Add Music")
-            audio_file = st.file_uploader("Music अपलोड गर्नुहोस् (MP3)", type=["mp3", "wav"], key="music_upload")
-            volume = st.slider("Volume", 0.0, 1.0, 0.5, key="vol_slider")
+            st.markdown(f"### {t('music', lang)}")
+            audio_file = st.file_uploader(t("upload_music", lang), type=["mp3", "wav"], key="music_upload")
+            volume = st.slider(t("volume", lang), 0.0, 1.0, 0.5, key="vol_slider")
 
             if audio_file:
                 audio_path = os.path.join("temp_edits", audio_file.name)
                 with open(audio_path, "wb") as f:
                     f.write(audio_file.getbuffer())
 
-                if st.button("🎵 Add Music", type="primary", use_container_width=True):
-                    with st.spinner("गीत मिलाउँदै..."):
+                if st.button(t("add_music_btn", lang), type="primary", use_container_width=True):
+                    with st.spinner(t("adding_music", lang)):
                         res = add_music(input_path, audio_path, output_path, volume)
                     if res["success"]:
-                        st.success("✅ Music added!")
+                        st.success(t("music_success", lang))
                         st.video(output_path)
                         with open(output_path, "rb") as f:
-                            st.download_button("⬇️ Download with Music", data=f.read(), file_name="music_video.mp4", mime="video/mp4")
+                            st.download_button(t("download_music", lang), data=f.read(), file_name="music_video.mp4", mime="video/mp4")
                     else:
                         st.error(f"❌ {res['error']}")
 
         # ---- 3. TEXT ----
         with edit_tab3:
-            st.markdown("### 🔤 Add Text")
-            txt_input = st.text_input("Text लेख्नुहोस्", "Hello World")
+            st.markdown(f"### {t('text', lang)}")
+            txt_input = st.text_input(t("enter_text", lang), "Hello World")
             col1, col2, col3 = st.columns(3)
             with col1:
-                txt_pos = st.selectbox("Position", ["bottom", "center", "top"])
+                txt_pos = st.selectbox(t("position", lang), ["bottom", "center", "top"])
             with col2:
-                txt_size = st.slider("Size", 20, 100, 50)
+                txt_size = st.slider(t("size", lang), 20, 100, 50)
             with col3:
-                txt_color = st.color_picker("Color", "#FFFFFF")
+                txt_color = st.color_picker(t("color", lang), "#FFFFFF")
 
-            if st.button("🔤 Add Text", type="primary", use_container_width=True):
-                with st.spinner("टेक्स्ट राख्दै..."):
+            if st.button(t("add_text_btn", lang), type="primary", use_container_width=True):
+                with st.spinner(t("adding_text", lang)):
                     res = add_text(input_path, output_path, txt_input, txt_pos, txt_size, txt_color)
                 if res["success"]:
-                    st.success("✅ Text added!")
+                    st.success(t("text_success", lang))
                     st.video(output_path)
                     with open(output_path, "rb") as f:
-                        st.download_button("⬇️ Download with Text", data=f.read(), file_name="text_video.mp4", mime="video/mp4")
+                        st.download_button(t("download_text", lang), data=f.read(), file_name="text_video.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
         # ---- 4. FILTER ----
         with edit_tab4:
-            st.markdown("### 🎨 Filters")
-            filter_type = st.selectbox("Filter Type", ["cinematic", "vibrant", "bw", "warm"], key="f_select")
+            st.markdown(f"### {t('filter', lang)}")
+            filter_type = st.selectbox(t("filter_type", lang), ["cinematic", "vibrant", "bw", "warm"], key="f_select")
 
-            if st.button("🎨 Apply Filter", type="primary", use_container_width=True):
-                with st.spinner("फिल्टर लगाउँदै..."):
+            if st.button(t("apply_filter_btn", lang), type="primary", use_container_width=True):
+                with st.spinner(t("applying_filter", lang)):
                     res = apply_filter(input_path, output_path, filter_type)
                 if res["success"]:
-                    st.success("✅ Filter applied!")
+                    st.success(t("filter_success", lang))
                     st.video(output_path)
                     with open(output_path, "rb") as f:
-                        st.download_button("⬇️ Download Filtered", data=f.read(), file_name="filtered.mp4", mime="video/mp4")
+                        st.download_button(t("download_filtered", lang), data=f.read(), file_name="filtered.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
         # ---- 5. EFFECT ----
         with edit_tab5:
-            st.markdown("### ⚡ Effects")
-            effect_type = st.selectbox("Effect Type", ["slowmo", "fastmo"], key="e_select")
+            st.markdown(f"### {t('effect', lang)}")
+            effect_type = st.selectbox(t("effect_type", lang), ["slowmo", "fastmo"], key="e_select")
 
-            if st.button("⚡ Apply Effect", type="primary", use_container_width=True):
-                with st.spinner("इफेक्ट लगाउँदै..."):
+            if st.button(t("apply_effect_btn", lang), type="primary", use_container_width=True):
+                with st.spinner(t("applying_effect", lang)):
                     res = apply_effect(input_path, output_path, effect_type)
                 if res["success"]:
-                    st.success("✅ Effect applied!")
+                    st.success(t("effect_success", lang))
                     st.video(output_path)
                     with open(output_path, "rb") as f:
-                        st.download_button("⬇️ Download Effect", data=f.read(), file_name="effect_video.mp4", mime="video/mp4")
+                        st.download_button(t("download_effect", lang), data=f.read(), file_name="effect_video.mp4", mime="video/mp4")
                 else:
                     st.error(f"❌ {res['error']}")
 
     else:
-        st.info("👆 माथि भिडियो अपलोड गर्नुहोस्")
-
-# ============================================================
-# 💬 TAB 6: UNIVERSAL AI CAPTION & VIDEO TRANSLATOR
-# ============================================================
-# ⚠️ app.py को माथि यो import थप्न नबिर्सनुहोस्:
-# from caption_translator import translate_srt_gemini
-# from caption_maker import generate_srt
-#from subtitle_tools import burn_subtitles, parse_srt, save_srt
+        st.info(t("upload_video_hint", lang))
 
 # ============================================================
 # 💬 TAB 6: UNIVERSAL AI CAPTION & VIDEO TRANSLATOR
 # ============================================================
 with tab_caption:
-
-    st.markdown("## 🌍 Universal AI Caption & Translator")
-    st.caption("Whisper AI + Gemini AI + Subtitle Editor")
+    st.markdown(f"## {t('caption_title', lang)}")
+    st.caption(t("caption_hint", lang))
 
     uploaded_cap_video = st.file_uploader(
-        "🎬 भिडियो अपलोड गर्नुहोस्",
+        t("upload_video", lang),
         type=["mp4", "mov", "avi", "mkv"],
         key="caption_video_uploader"
     )
@@ -3284,56 +3279,48 @@ with tab_caption:
 
         st.markdown("---")
         
-        # ---- Settings ----
         col1, col2 = st.columns(2)
         with col1:
-            model_size = st.selectbox("🧠 Whisper AI Model", ["small", "medium", "large-v3"], index=0)
+            model_size = st.selectbox(t("whisper_model", lang), ["small", "medium", "large-v3"], index=0)
         with col2:
-            source_options = {"🌐 Auto Detect": None, "नेपाली": "ne", "English": "en", "हिन्दी": "hi"}
-            source_name = st.selectbox("🎤 Video Original Language", list(source_options.keys()))
+            source_options = {t("auto_detect", lang): None, "नेपाली": "ne", "English": "en", "हिन्दी": "hi"}
+            source_name = st.selectbox(t("original_language", lang), list(source_options.keys()))
         
         selected_lang = source_options[source_name]
 
-        # Target language
         target_languages_list = ["Nepali", "English", "Hindi", "Chinese", "Japanese", "Korean", "French", "Spanish"]
-        target_language_name = st.selectbox("भिडियोलाई कुन भाषामा अनुवाद गर्ने?", target_languages_list, index=0)
+        target_language_name = st.selectbox(t("target_language", lang), target_languages_list, index=0)
 
-        # ---- Generate Button ----
-        if st.button("🚀 Generate & Translate Captions", type="primary", use_container_width=True, key="generate_caption_btn"):
+        if st.button(t("generate_caption_btn", lang), type="primary", use_container_width=True, key="generate_caption_btn"):
             
             original_srt = os.path.join("temp_captions", f"{video_stem}_original.srt")
             translated_srt = os.path.join("temp_captions", f"{video_stem}_{target_language_name}.srt")
 
-            with st.spinner(f"🎤 Whisper AI ले आवाज पहिचान गर्दैछ..."):
+            with st.spinner(t("recognizing_voice", lang)):
                 result = generate_srt(video_path, original_srt, model_size=model_size, language=selected_lang)
 
             if result["success"]:
-                st.success(f"✅ Voice Recognition Complete! ({result['segments']} segments)")
+                st.success(f"✅ {t('voice_complete', lang)} ({result['segments']} {t('segments', lang)})")
                 
-                with st.spinner(f"🌍 Gemini AI ले {target_language_name} मा अनुवाद गर्दैछ..."):
+                with st.spinner(t("translating", lang) + f" {target_language_name}..."):
                     translation_result = translate_srt_gemini(original_srt, translated_srt, target_language_name)
 
                 if translation_result["success"]:
-                    st.success(f"🎉 Translation Complete! Target: {target_language_name}")
-                    # session state मा सेभ गर्ने
+                    st.success(f"🎉 {t('translation_complete', lang)} Target: {target_language_name}")
                     st.session_state['srt_generated'] = True
                     st.session_state['original_srt'] = original_srt
                     st.session_state['translated_srt'] = translated_srt
                 else:
-                    st.error(f"❌ Translation Error: {translation_result['error']}")
+                    st.error(f"❌ {t('translation_error', lang)}: {translation_result['error']}")
 
-        # ============================================================
-        # Subtitle Editor & Burn-in (यदि SRT तयार भइसक्यो भने)
-        # ============================================================
         if st.session_state.get('srt_generated'):
             st.markdown("---")
-            st.markdown("### 📝 Subtitle Editor & Burn-in")
+            st.markdown(f"### {t('subtitle_editor', lang)}")
             
-            # १. Subtitle Editor
             srt_to_edit = st.session_state['translated_srt']
             blocks = parse_srt(srt_to_edit)
             
-            with st.expander("✏️ Edit Translated Subtitles", expanded=False):
+            with st.expander(t("edit_subtitles", lang), expanded=False):
                 edited_blocks = []
                 for b in blocks:
                     col_t, col_txt = st.columns([1, 4])
@@ -3341,7 +3328,7 @@ with tab_caption:
                         st.markdown(f"**{b['time']}**")
                     with col_txt:
                         new_text = st.text_area(
-                            f"Line {b['index']}", 
+                            f"{t('line', lang)} {b['index']}", 
                             value=b['text'], 
                             height=68, 
                             key=f"edit_srt_{b['index']}"
@@ -3352,27 +3339,26 @@ with tab_caption:
                             "text": new_text
                         })
                 
-                if st.button("💾 Save Edited Subtitles"):
+                if st.button(t("save_subtitles", lang)):
                     save_srt(edited_blocks, srt_to_edit)
-                    st.success("✅ Subtitle updated!")
+                    st.success(t("subtitle_saved", lang))
                     st.rerun()
 
-            # २. Burn-in Subtitles
-            st.markdown("### 🔥 Burn-in Subtitles (भिडियोमै टाँस्ने)")
+            st.markdown(f"### 🔥 {t('burn_in_subtitles', lang)}")
             
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                font_size = st.slider("Font Size", 12, 48, 24)
+                font_size = st.slider(t("font_size", lang), 12, 48, 24)
             with col_f2:
-                font_color_hex = st.color_picker("Font Color", "#FFFFFF")
-            # Hex to ASS BGR format
+                font_color_hex = st.color_picker(t("font_color", lang), "#FFFFFF")
+            
             hex_c = font_color_hex.lstrip("#")
             font_ass = f"{hex_c[4:6]}{hex_c[2:4]}{hex_c[0:2]}"
 
-            if st.button("🔥 Burn Subtitles into Video", type="primary"):
+            if st.button(t("burn_btn", lang), type="primary"):
                 burned_video_path = os.path.join("temp_captions", f"{video_stem}_burned.mp4")
                 
-                with st.spinner("🔥 भिडियोमा क्याप्सन टाँस्दै..."):
+                with st.spinner(t("burning", lang)):
                     res = burn_subtitles(
                         video_path, 
                         st.session_state['translated_srt'], 
@@ -3382,143 +3368,136 @@ with tab_caption:
                     )
                 
                 if res["success"]:
-                    st.success("✅ Subtitle burned successfully!")
+                    st.success(t("burn_success", lang))
                     st.video(burned_video_path)
                     
                     with open(burned_video_path, "rb") as f:
                         st.download_button(
-                            "⬇️ Download Final Video (Hardcoded Subtitle)",
+                            t("download_final_video", lang),
                             data=f.read(),
                             file_name=f"{video_stem}_final.mp4",
                             mime="video/mp4",
                             use_container_width=True
                         )
                 else:
-                    st.error(f"❌ Burn-in error: {res['error']}")
+                    st.error(f"❌ {t('burn_error', lang)}: {res['error']}")
 
-            # ३. Normal Downloads
-            st.markdown("### ⬇️ Download SRT")
+            st.markdown(f"### ⬇️ {t('download_srt', lang)}")
             col_d1, col_d2 = st.columns(2)
             with col_d1:
                 with open(st.session_state['original_srt'], "rb") as f:
-                    st.download_button("⬇️ Original SRT", data=f.read(), file_name=f"{video_stem}_original.srt", mime="text/plain", use_container_width=True)
+                    st.download_button(t("original_srt", lang), data=f.read(), file_name=f"{video_stem}_original.srt", mime="text/plain", use_container_width=True)
             with col_d2:
                 with open(st.session_state['translated_srt'], "rb") as f:
-                    st.download_button("⬇️ Translated SRT", data=f.read(), file_name=f"{video_stem}_translated.srt", mime="text/plain", use_container_width=True)
+                    st.download_button(t("translated_srt", lang), data=f.read(), file_name=f"{video_stem}_translated.srt", mime="text/plain", use_container_width=True)
 
     else:
-        st.info("👆 माथि भिडियो अपलोड गरेर आफूले चाहेको भाषामा Subtitle बनाउनुहोस्।")
+        st.info(t("caption_info", lang))
 
 # ============================================================
 # 💼 TAB 7: PROJECT & CLIENT MANAGER (CRM)
 # ============================================================
 with tab_crm:
-    st.markdown("## 💼 Client & Project Manager")
-    st.caption("तपाईंका ग्राहक (Clients) र उनीहरूको काम (Projects) ट्र्याक गर्नुहोस्।")
+    st.markdown(f"## {t('crm_title', lang)}")
+    st.caption(t("crm_hint", lang))
 
-    # 3 वटा मुख्य Sub-tabs
-    crm_tab1, crm_tab2, crm_tab3 = st.tabs(["📁 Projects", "👥 Clients", "📦 Delivery"])
+    crm_tab1, crm_tab2, crm_tab3 = st.tabs([t("projects", lang), t("clients", lang), t("delivery", lang)])
 
-    # ---- १. Projects Tab ----
     with crm_tab1:
         col_h1, col_h2 = st.columns([3, 1])
         with col_h1:
-            st.markdown("### 📋 सबै कामहरू (Projects)")
+            st.markdown(f"### {t('all_projects', lang)}")
         with col_h2:
-            show_proj_form = st.toggle("➕ नयाँ काम", key="crm_toggle_proj")
+            show_proj_form = st.toggle(t("new_project", lang), key="crm_toggle_proj")
 
         if show_proj_form:
             with st.form("add_project_form"):
-                st.markdown("#### नयाँ Project थप्नुहोस्")
+                st.markdown(f"#### {t('add_project', lang)}")
                 proj_clients = get_clients(st.session_state.user)
                 client_options = {c['name']: c['id'] for c in proj_clients}
                 
                 if not client_options:
-                    st.warning("⚠️ पहिले 'Clients' tab मा गएर ग्राहक थप्नुहोस्।")
+                    st.warning(t("add_client_first", lang))
                 else:
-                    p_client = st.selectbox("ग्राहक (Client) छान्नुहोस्", list(client_options.keys()))
-                    p_title = st.text_input("कामको नाम (Title)")
-                    p_desc = st.text_area("विवरण (Description)")
-                    p_status = st.selectbox("स्थिति (Status)", ["Pending", "In Progress", "Completed"])
-                    p_budget = st.number_input("बजेट (रु.)", min_value=0.0, step=1000.0)
-                    p_deadline = st.date_input("डेडलाइन (Deadline)")
+                    p_client = st.selectbox(t("select_client", lang), list(client_options.keys()))
+                    p_title = st.text_input(t("project_title", lang))
+                    p_desc = st.text_area(t("description", lang))
+                    p_status = st.selectbox(t("status", lang), [t("pending", lang), t("in_progress", lang), t("completed", lang)])
+                    p_budget = st.number_input(t("budget", lang), min_value=0.0, step=1000.0)
+                    p_deadline = st.date_input(t("deadline", lang))
                     
-                    if st.form_submit_button("💾 सेभ गर्नुहोस्", type="primary"):
+                    if st.form_submit_button(t("save_btn", lang), type="primary"):
                         if p_title and p_client:
                             add_project(
                                 st.session_state.user, client_options[p_client], 
                                 p_title, p_desc, p_status, p_budget, str(p_deadline)
                             )
-                            st.success("✅ Project थपियो!")
+                            st.success(t("project_added", lang))
                             st.rerun()
                         else:
-                            st.error("कामको नाम र ग्राहक अनिवार्य छ।")
+                            st.error(t("title_client_required", lang))
 
-        # Project List
         st.markdown("---")
         projects = get_projects(st.session_state.user)
         if not projects:
-            st.info("कुनै Project छैन। माथिबाट नयाँ थप्नुहोस्।")
+            st.info(t("no_projects", lang))
         else:
             for p in projects:
                 with st.expander(f"{p['title']} — ({p['client_name']}) — {p['status']}", expanded=False):
-                    st.markdown(f"**विवरण:** {p['description']}")
-                    st.markdown(f"**बजेट:** रु. {p['budget']:,.2f} | **डेडलाइन:** {p['deadline']}")
+                    st.markdown(f"**{t('description', lang)}:** {p['description']}")
+                    st.markdown(f"**{t('budget', lang)}:** रु. {p['budget']:,.2f} | **{t('deadline', lang)}:** {p['deadline']}")
                     
-                    # Status Change
                     new_status = st.selectbox(
-                        "स्थिति परिवर्तन गर्नुहोस्", 
-                        ["Pending", "In Progress", "Completed"], 
-                        index=["Pending", "In Progress", "Completed"].index(p['status']),
+                        t("change_status", lang), 
+                        [t("pending", lang), t("in_progress", lang), t("completed", lang)], 
+                        index=[t("pending", lang), t("in_progress", lang), t("completed", lang)].index(p['status']),
                         key=f"status_{p['id']}"
                     )
                     if new_status != p['status']:
-                        if st.button("अपडेट गर्नुहोस्", key=f"upd_{p['id']}"):
+                        if st.button(t("update_btn", lang), key=f"upd_{p['id']}"):
                             update_project_status(p['id'], new_status)
                             st.rerun()
 
-    # ---- २. Clients Tab ----
     with crm_tab2:
         col_c1, col_c2 = st.columns([3, 1])
         with col_c1:
-            st.markdown("### 👥 ग्राहकहरू (Clients)")
+            st.markdown(f"### {t('clients', lang)}")
         with col_c2:
-            show_client_form = st.toggle("➕ नयाँ ग्राहक", key="crm_toggle_client")
+            show_client_form = st.toggle(t("new_client", lang), key="crm_toggle_client")
 
         if show_client_form:
             with st.form("add_client_form"):
-                st.markdown("#### नयाँ ग्राहक थप्नुहोस्")
-                c_name = st.text_input("नाम (Name)")
-                c_email = st.text_input("इमेल (Email)")
-                c_phone = st.text_input("फोन (Phone)")
-                c_company = st.text_input("कम्पनी (Company)")
+                st.markdown(f"#### {t('add_client', lang)}")
+                c_name = st.text_input(t("name", lang))
+                c_email = st.text_input(t("email", lang))
+                c_phone = st.text_input(t("phone", lang))
+                c_company = st.text_input(t("company", lang))
                 
-                if st.form_submit_button("💾 सेव गर्नुहोस्", type="primary"):
+                if st.form_submit_button(t("save_btn", lang), type="primary"):
                     if c_name:
                         add_client(st.session_state.user, c_name, c_email, c_phone, c_company)
-                        st.success("✅ ग्राहक थपियो!")
+                        st.success(t("client_added", lang))
                         st.rerun()
                     else:
-                        st.error("नाम अनिवार्य छ।")
+                        st.error(t("name_required", lang))
 
-        # Client List
         st.markdown("---")
         clients = get_clients(st.session_state.user)
         if not clients:
-            st.info("कुनै ग्राहक छैन। माथिबाट नयाँ थप्नुहोस्।")
+            st.info(t("no_clients", lang))
         else:
             for c in clients:
                 st.markdown(f"👤 **{c['name']}** ({c['company']}) — 📧 {c['email']} | 📞 {c['phone']}")
-    # ---- ३. Delivery Tab
+                
     with crm_tab3:
-        st.markdown("### 📦 Final File Delivery")
-        st.caption("ग्राहकलाई फाइल पठाउन सुरक्षित लिंक बनाउनुहोस्।")
+        st.markdown(f"### {t('delivery_title', lang)}")
+        st.caption(t("delivery_hint", lang))
         
         with st.form("delivery_form"):
-            d_project = st.text_input("प्रोजेक्टको नाम (Project Name)")
-            d_file = st.file_uploader("फाइल अपलोड गर्नुहोस् (PDF, ZIP, Image)", type=["pdf", "zip", "png", "jpg", "docx"])
+            d_project = st.text_input(t("project_title", lang))
+            d_file = st.file_uploader(t("upload_file_label", lang), type=["pdf", "zip", "png", "jpg", "docx"])
             
-            if st.form_submit_button("🔗 लिंक बनाउनुहोस्", type="primary"):
+            if st.form_submit_button(t("create_link", lang), type="primary"):
                 if d_file and d_project:
                     os.makedirs("temp_delivery", exist_ok=True)
                     file_path = os.path.join("temp_delivery", d_file.name)
@@ -3527,51 +3506,47 @@ with tab_crm:
                     
                     result = create_delivery_link(st.session_state.user, d_project, file_path)
                     if result["success"]:
-                         # ✅ यहाँ Notification थप्नुहोस्
                         from notifications import add_notification
                         add_notification(
                             st.session_state.user, 
                             "📦 डेलिभरी सफल", 
                             f"प्रोजेक्ट '{d_project}' को फाइल ग्राहकलाई पठाइयो।"
                         )
-                        # APP_URL .env बाट लिने (जस्तै: https://myapp.streamlit.app)
                         base_url = os.getenv("APP_URL", "http://localhost:8501")
                         share_link = f"{base_url}/?delivery={result['token']}"
                         
-                        st.success("✅ लिंक तयार भयो!")
+                        st.success(t("link_created", lang))
                         st.code(share_link, language=None)
-                        st.info("यो लिंक ग्राहकलाई पठाउनुहोस्।")
+                        st.info(t("link_hint", lang))
                 else:
-                    st.error("प्रोजेक्टको नाम र फाइल अनिवार्य छ।")
+                    st.error(t("title_file_required", lang))
 
 # ============================================================
 # 🛠️ TAB 8: TOOLS & COST TRACKING
 # ============================================================
 with tab_tools:
-    st.markdown("## 🛠️ System Tools & Cost Tracking")
+    st.markdown(f"## {t('tools_title', lang)}")
 
-    tool_tab1, tool_tab2 = st.tabs(["💰 API Cost Tracking", "✅ Quality Checker"])
+    tool_tab1, tool_tab2 = st.tabs([t("api_cost", lang), t("quality_checker", lang)])
 
-    # ---- Cost Tracking ----
     with tool_tab1:
-        st.markdown("### तपाईंको API खर्च (Gemini AI)")
+        st.markdown(f"### {t('api_cost_title', lang)}")
         
         u_cost = get_user_cost(st.session_state.user)
-        st.metric("कुल खर्च (तपाईंको)", f"${u_cost:.4f}")
+        st.metric(t("your_cost", lang), f"${u_cost:.4f}")
         
         if st.session_state.get("user_role") == "admin":
             st.markdown("---")
             total_c = get_total_cost()
-            st.metric("कुल खर्च (सबै प्रयोगकर्ता)", f"${total_c:.4f}")
+            st.metric(t("total_cost", lang), f"${total_c:.4f}")
             
-            st.info("💡 **नोट:** प्रत्येक पटक AI प्रयोग गर्दा यहाँ ०.०००१ डलर थपिन्छ।")
+            st.info(t("cost_note", lang))
 
-    # ---- Quality Checker ----
     with tool_tab2:
-        st.markdown("### डकुमेन्ट गुणस्तर जाँच (Quality Check)")
-        st.caption("PDF वा CSV फाइल अपलोड गर्नुहोस्, AI ले यसको गुणस्तर जाँच्नेछ।")
+        st.markdown(f"### {t('quality_title', lang)}")
+        st.caption(t("quality_hint", lang))
         
-        qc_file = st.file_uploader("फाइल अपलोड गर्नुहोस्", type=["pdf", "csv"])
+        qc_file = st.file_uploader(t("upload_file_label", lang), type=["pdf", "csv"])
         
         if qc_file:
             os.makedirs("temp_qc", exist_ok=True)
@@ -3579,18 +3554,18 @@ with tab_tools:
             with open(qc_path, "wb") as f:
                 f.write(qc_file.getbuffer())
                 
-            if st.button("🔍 जाँच्नुहोस् (Check Quality)", type="primary"):
-                with st.spinner("AI ले फाइल जाँच्दैछ..."):
+            if st.button(t("check_btn", lang), type="primary"):
+                with st.spinner(t("checking", lang)):
                     res = check_document_quality(qc_path)
                     
                 if res["success"]:
-                    st.success("✅ जाँच सकियो!")
+                    st.success(t("check_success", lang))
                     st.markdown(res["report"])
                 else:
                     st.error(f"❌ Error: {res['error']}")
-                                                                                             
+
 # ============================================================
-# 👑 ADMIN TAB (Admin भए मात्र)
+# 👑 ADMIN TAB
 # ============================================================
 if is_admin and tab_admin is not None:
     with tab_admin:
@@ -3603,16 +3578,16 @@ stats_final = get_stats()
 st.markdown("---")
 fcol1, fcol2, fcol3 = st.columns(3)
 with fcol1:
-    st.markdown("#### 🧠 PDF Brain")
-    st.caption(f"**Version:** 1.0 Pro")
-    st.caption(f"**User:** {st.session_state.user}")
+    st.markdown(f"#### 🧠 PDF Brain")
+    st.caption(f"**{t('version', lang)}:** 1.0 Pro")
+    st.caption(f"**{t('user', lang)}:** {st.session_state.user}")
 with fcol2:
     st.markdown(f"#### 📊 {t('queries', lang).title()}")
     st.caption(f"💬 {stats_final['queries']} {t('queries', lang)}")
     st.caption(f"📄 {stats_final['pdfs']} PDFs")
 with fcol3:
-    st.markdown(f"#### ⚙️ Status")
-    st.caption(f"✂️ {stats_final['chunks']} chunks")
+    st.markdown(f"#### ⚙️ {t('status', lang)}")
+    st.caption(f"✂️ {stats_final['chunks']} {t('chunks', lang)}")
     st.caption(f"🌐 {lang.upper()}")
 st.markdown("---")
-st.caption(f"**{t('made_with', lang)}** | © 2026 PDF Brain | Powered by PDF Brain AI")
+st.caption(f"**{t('made_with', lang)}** | © 2026 PDF Brain | Powered by PDF Brain AI")           
