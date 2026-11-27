@@ -1,4 +1,4 @@
-# auth.py — PDF Brain (Secure Auth System v4 — Language + Token + OTP)
+# auth.py — PDF Brain (Secure Auth System v5 — Full 21 Languages + OTP + Reset)
 import os
 import json
 import bcrypt
@@ -105,40 +105,71 @@ def _save_json(filepath, data):
         return False
 
 
-
+# ============================================================
+# LANGUAGE NORMALIZER — सबै २१ भाषा Support
+# ============================================================
 def _normalize_language(language, default="ne"):
-    """Translations मा उपलब्ध language code लाई normalize गर्ने."""
+    """
+    Translations मा उपलब्ध २१ भाषा मध्ये एउटा normalize गर्ने।
+    - Input: "en", "en-US", "EN", "ne_NP", "zh-CN", आदि
+    - Output: supported code (जस्तै "en", "ne", "zh")
+    - Fallback: default (ne) → en → ne
+    """
+    # Default languages list (translations import fail भए fallback)
+    DEFAULT_SUPPORTED = {
+        "en", "ne", "hi", "zh", "es", "fr", "ar", "ja", "ko", "de",
+        "pt", "ru", "it", "tr", "id", "vi", "th", "nl", "pl", "sv", "tl"
+    }
 
+    # Supported languages लोड गर्ने (translations बाट)
+    supported = DEFAULT_SUPPORTED
+    try:
+        from translations import LANGUAGES
+        if LANGUAGES:
+            supported = set(LANGUAGES.keys())
+    except Exception as e:
+        print(f"[LANGUAGE CHECK WARNING] {e} — default list प्रयोग हुँदैछ")
+
+    # Input normalize
     code = str(language or default).strip().lower()
     code = code.replace("_", "-").split("-")[0]
 
-    # Check whether the selected language is supported
-    try:
-        from translations import LANGUAGES
+    if code in supported:
+        return code
 
-        if code in LANGUAGES:
-            return code
-
-    except Exception as e:
-        print(f"[LANGUAGE CHECK WARNING] {e}")
-
-    # Normalize fallback language
+    # Fallback 1: user को default
     fallback = str(default or "ne").strip().lower()
     fallback = fallback.replace("_", "-").split("-")[0]
+    if fallback in supported:
+        return fallback
 
-    # Allow all supported fallback languages
+    # Fallback 2: en (यदि छ भने)
+    if "en" in supported:
+        return "en"
+
+    # Fallback 3: ne (यदि छ भने)
+    if "ne" in supported:
+        return "ne"
+
+    # Final fallback: पहिलो available
+    return next(iter(supported), "ne")
+
+
+def get_supported_languages():
+    """सबै supported language codes फर्काउने (UI dropdown का लागि)."""
     try:
         from translations import LANGUAGES
+        return list(LANGUAGES.keys())
+    except Exception:
+        return ["en", "ne", "hi", "zh", "es", "fr", "ar", "ja", "ko",
+                "de", "pt", "ru", "it", "tr", "id", "vi", "th", "nl",
+                "pl", "sv", "tl"]
 
-        if fallback in LANGUAGES:
-            return fallback
 
-    except Exception as e:
-        print(f"[LANGUAGE FALLBACK WARNING] {e}")
-
-    # Final default language
-    return "ne"
-
+def is_language_supported(language):
+    """भाषा supported छ कि छैन जाँच्ने."""
+    code = str(language or "").strip().lower().replace("_", "-").split("-")[0]
+    return code in get_supported_languages()
 
 
 # ============================================================
@@ -212,7 +243,7 @@ def create_user(username, password, email="", role="user", preferred_language="n
 
     users[username] = {
         "password": bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
-        "role": "user",  # सुरक्षा: Signup बाट Admin/Manager बनाउन नदिने
+        "role": "user",
         "email": email,
         "created": datetime.now().isoformat(),
         "last_login": None,
@@ -235,6 +266,7 @@ def verify_user(username, password):
     password = str(password or "")
 
     if username not in users:
+        # Email बाट पनि खोज्ने
         for u, data in users.items():
             if str(data.get("email", "")).lower() == username.lower():
                 username = u
@@ -389,6 +421,83 @@ def update_user_role(username, new_role):
 
 
 # ============================================================
+# 🆕 EMAIL-BASED PASSWORD RESET (login.py का लागि)
+# ============================================================
+def user_exists_by_email(email):
+    """
+    Email पहिले नै दर्ता छ कि छैन check गर्छ।
+    Returns: bool
+    """
+    email = str(email or "").strip().lower()
+    if not email:
+        return False
+
+    try:
+        users = _load_users()
+        for uname, udata in users.items():
+            if not isinstance(udata, dict):
+                continue
+            if str(udata.get("email", "")).strip().lower() == email:
+                return True
+        return False
+    except Exception as e:
+        print(f"[auth] user_exists_by_email error: {e}")
+        return False
+
+
+def update_user_password(email, new_password):
+    """
+    Email द्वारा user खोजेर password update गर्छ (bcrypt सहित)।
+    Returns: (success: bool, message: str)
+    """
+    email = str(email or "").strip().lower()
+    new_password = str(new_password or "")
+
+    if not email:
+        return False, "Email आवश्यक छ।"
+    if not new_password:
+        return False, "Password आवश्यक छ।"
+    if len(new_password) < 6:
+        return False, "Password कम्तिमा ६ अक्षर हुनुपर्छ।"
+    if not validate_email(email):
+        return False, "Email format गलत छ।"
+
+    try:
+        users = _load_users()
+        for uname, udata in users.items():
+            if not isinstance(udata, dict):
+                continue
+            if str(udata.get("email", "")).strip().lower() == email:
+                # Password update (bcrypt hash)
+                users[uname]["password"] = bcrypt.hashpw(
+                    new_password.encode("utf-8"), bcrypt.gensalt()
+                ).decode("utf-8")
+
+                # Lockout reset
+                users[uname]["failed_attempts"] = 0
+                users[uname]["locked_until"] = None
+
+                if not _save_users(users):
+                    return False, "Password save हुन सकेन।"
+
+                return True, f"Password सफलतापूर्वक बदलियो ({uname})।"
+
+        return False, "यो Email दर्ता छैन।"
+    except Exception as e:
+        return False, f"Password update error: {e}"
+
+
+def find_user_by_email(email):
+    """Email बाट username खोज्ने."""
+    email = str(email or "").strip().lower()
+    users = _load_users()
+    for username, data in users.items():
+        if str(data.get("email", "")).lower() == email:
+            return username
+    return None
+
+
+# ============================================================
 # LIST & STATS
 # ============================================================
 def list_users():
@@ -438,7 +547,10 @@ def get_user_language(username, default="ne"):
 
 
 def update_user_language(username, language):
-    """प्रयोगकर्ताको भाषा परिवर्तन गरेर सुरक्षित गर्ने."""
+    """
+    प्रयोगकर्ताको भाषा परिवर्तन गरेर सुरक्षित गर्ने।
+    Returns: (success: bool, message: str)
+    """
     users = _load_users()
     if username not in users:
         return False, "User छैन"
@@ -508,16 +620,6 @@ def generate_reset_token(username, email=None):
     if not _save_tokens(tokens):
         return None, "Reset token save हुन सकेन"
     return token, "Token सिर्जना भयो"
-
-
-def find_user_by_email(email):
-    """Email बाट username खोज्ने."""
-    email = str(email or "").strip().lower()
-    users = _load_users()
-    for username, data in users.items():
-        if str(data.get("email", "")).lower() == email:
-            return username
-    return None
 
 
 def verify_reset_token(token):
@@ -675,12 +777,18 @@ def reset_password_with_otp(username, otp_code, new_password):
 
 
 # ============================================================
-# BASIC SELF-TEST (admin credentials वा वास्तविक database modify नगर्ने)
+# BASIC SELF-TEST
 # ============================================================
 if __name__ == "__main__":
     print("auth.py syntax/import self-test")
-    print("Language normalizer:", _normalize_language("ne"))
+    print("Language normalizer (ne):", _normalize_language("ne"))
+    print("Language normalizer (en-US):", _normalize_language("en-US"))
+    print("Language normalizer (zh-CN):", _normalize_language("zh-CN"))
+    print("Language normalizer (invalid):", _normalize_language("xx"))
+    print("Supported languages:", len(get_supported_languages()))
+    print("is_language_supported('hi'):", is_language_supported("hi"))
     print("Password strength helper:", check_password_strength("Test123!"))
     print("Email validator:", validate_email("test@example.com"))
     print("Username validator:", validate_username("testuser"))
+    print("user_exists_by_email('test@example.com'):", user_exists_by_email("test@example.com"))
     print("Auth module self-test completed.")

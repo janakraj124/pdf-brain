@@ -67,6 +67,47 @@ from admin import render_admin_panel
 load_dotenv()
 
 # ============================================================
+# 🔧 SAFE STATUS INDEX — सबै भाषाको लागि (CRM status)
+# ============================================================
+def _safe_status_index(status_value, lang="ne"):
+    """
+    CRM status लाई translated list मा safe रूपमा खोज्ने।
+    कुनै पनि भाषामा काम गर्छ।
+
+    Returns: int (0, 1, वा 2)
+    """
+    # Translated labels (हालको भाषामा)
+    translated = [
+        t("pending", lang),
+        t("in_progress", lang),
+        t("completed", lang),
+    ]
+
+    # English fallback (पुरानो data का लागि)
+    english = ["Pending", "In Progress", "Completed"]
+
+    # Key names (database मा key save भएको हुन सक्छ)
+    keys = ["pending", "in_progress", "completed"]
+
+    status_str = str(status_value or "").strip()
+
+    # 1. Translated value मा खोज्ने
+    if status_str in translated:
+        return translated.index(status_str)
+
+    # 2. English value मा खोज्ने
+    if status_str in english:
+        return english.index(status_str)
+
+    # 3. Key name मा खोज्ने (case-insensitive, space → underscore)
+    status_lower = status_str.lower().replace(" ", "_")
+    if status_lower in keys:
+        return keys.index(status_lower)
+
+    # 4. केही नमिले → default 0 (Pending)
+    return 0
+
+# ============================================================
 # 🎨 AVATAR HELPER FUNCTIONS
 # ============================================================
 AVATAR_DIR = "avatar_uploads"
@@ -1925,6 +1966,10 @@ with st.sidebar:
     # ============================================================
     avatar_html = render_avatar(st.session_state.user, size=50)
 
+        # ✅ भाषा अनुसार dynamic greeting
+    user_name = st.session_state.get("user", "User")
+    greeting_short = t("greeting_user_short", lang).replace("{name}", user_name)
+
     st.markdown(f"""
     <div class="fb-profile-card">
         <div class="fb-row">
@@ -1933,8 +1978,8 @@ with st.sidebar:
                 <div class="fb-online-dot"></div>
             </div>
             <div class="fb-info">
-                <h4>{st.session_state.user}</h4>
-                <p>🟢 Online <span class="fb-role-badge">{st.session_state.get('user_role', 'user').upper()}</span></p>
+                <h4>{greeting_short}</h4>
+                <p>🟢 {t('online', lang)} <span class="fb-role-badge">{st.session_state.get('user_role', 'user').upper()}</span></p>
             </div>
         </div>
     </div>
@@ -2864,7 +2909,7 @@ with tab4:
             try:
                 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
                 chat = client.chats.create(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     config=types.GenerateContentConfig(
                         tools=AGENT_TOOLS_V2,
                         temperature=0.1,
@@ -3011,7 +3056,7 @@ with tab4:
             try:
                 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
                 chat = client.chats.create(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     config=types.GenerateContentConfig(
                         tools=AGENT_TOOLS_V2,
                         temperature=0.1,
@@ -3443,19 +3488,41 @@ with tab_crm:
             st.info(t("no_projects", lang))
         else:
             for p in projects:
-                with st.expander(f"{p['title']} — ({p['client_name']}) — {p['status']}", expanded=False):
+                # ✅ Status labels र keys
+                status_labels = [
+                    t("pending", lang),
+                    t("in_progress", lang),
+                    t("completed", lang),
+                ]
+                status_keys = ["pending", "in_progress", "completed"]
+
+                # ✅ हालको index (safe — कुनै पनि भाषामा काम गर्छ)
+                current_idx = _safe_status_index(p.get('status', ''), lang)
+                current_label = status_labels[current_idx]
+
+                with st.expander(
+                    f"{p['title']} — ({p['client_name']}) — {current_label}",
+                    expanded=False
+                ):
                     st.markdown(f"**{t('description', lang)}:** {p['description']}")
-                    st.markdown(f"**{t('budget', lang)}:** रु. {p['budget']:,.2f} | **{t('deadline', lang)}:** {p['deadline']}")
-                    
-                    new_status = st.selectbox(
-                        t("change_status", lang), 
-                        [t("pending", lang), t("in_progress", lang), t("completed", lang)], 
-                        index=[t("pending", lang), t("in_progress", lang), t("completed", lang)].index(p['status']),
+                    st.markdown(
+                        f"**{t('budget', lang)}:** रु. {p['budget']:,.2f} | "
+                        f"**{t('deadline', lang)}:** {p['deadline']}"
+                    )
+
+                    # ✅ Index-based selectbox (translated values होइन)
+                    new_idx = st.selectbox(
+                        t("change_status", lang),
+                        options=[0, 1, 2],
+                        format_func=lambda i: status_labels[i],
+                        index=current_idx,
                         key=f"status_{p['id']}"
                     )
-                    if new_status != p['status']:
+
+                    # ✅ Index compare — सधैं सही
+                    if new_idx != current_idx:
                         if st.button(t("update_btn", lang), key=f"upd_{p['id']}"):
-                            update_project_status(p['id'], new_status)
+                            update_project_status(p['id'], status_keys[new_idx])
                             st.rerun()
 
     with crm_tab2:
